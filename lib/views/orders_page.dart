@@ -82,7 +82,7 @@ class _OrdersPageState extends State<OrdersPage> {
                           arguments: orders[index]);
                     },
                     title: Text(
-                        "${totalQuantityCalculator(orders[index].products)} Items Worth ₹ ${orders[index].total}"),
+                        "${totalQuantityCalculator(orders[index].products)} Items Worth KSh ${orders[index].total}"),
                     subtitle: Text(
                         "Ordered on ${DateTime.fromMillisecondsSinceEpoch(orders[index].created_at).toString()}"),
                     trailing: statusIcon(orders[index].status),
@@ -171,11 +171,11 @@ class _ViewOrderState extends State<ViewOrder> {
                                 ],
                               ),
                               Text(
-                                "₹${e.single_price.toString()} x ${e.quantity.toString()} quantity",
+                                "KSh${e.single_price.toString()} x ${e.quantity.toString()} quantity",
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                               Text(
-                                "₹${e.total_price.toString()}",
+                                "KSh${e.total_price.toString()}",
                                 style: TextStyle(
                                     fontWeight: FontWeight.bold, fontSize: 20),
                               ),
@@ -190,12 +190,12 @@ class _ViewOrderState extends State<ViewOrder> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Discount : ₹${args.discount}",
+                      "Discount : KSh${args.discount}",
                       style:
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                     ),
                     Text(
-                      "Total : ₹${args.total}",
+                      "Total : KSh${args.total}",
                       style:
                           TextStyle(fontWeight: FontWeight.bold, fontSize: 20),
                     ),

@@ -78,9 +78,9 @@ class _SpecificProductsState extends State<SpecificProducts> {
                             Row(
                               children: [
                                  SizedBox(width: 2,),
-                          Text("\₹${product.old_price}",style:  TextStyle(fontSize: 13,fontWeight: FontWeight.w500, decoration:  TextDecoration.lineThrough),),
+                          Text("\KSh${product.old_price}",style:  TextStyle(fontSize: 13,fontWeight: FontWeight.w500, decoration:  TextDecoration.lineThrough),),
                           SizedBox(width: 4,),
-                          Text("\₹${product.new_price}",style:  TextStyle(fontSize: 15,fontWeight: FontWeight.w600),),
+                          Text("\KSh${product.new_price}",style:  TextStyle(fontSize: 15,fontWeight: FontWeight.w600),),
                           SizedBox(width: 2,),
                           Icon(Icons.arrow_downward,color: Colors.green, size: 14,),
                                       Text("${discountPercent(product.old_price,product.new_price)}%",style:  TextStyle(fontSize: 16,fontWeight: FontWeight.bold,color: Colors.green),),
