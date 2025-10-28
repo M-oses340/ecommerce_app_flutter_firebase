@@ -1,4 +1,3 @@
-// api/index.js
 import express from "express";
 import serverless from "serverless-http";
 import axios from "axios";
@@ -9,14 +8,17 @@ dotenv.config();
 const app = express();
 app.use(express.json());
 
-// Root route
-app.get("/", (req, res) => res.send("✅ M-Pesa Backend is Running"));
+// ✅ Root route
+app.get("/", (req, res) => {
+  res.send("✅ M-Pesa Backend is Running");
+});
 
-// Token endpoint
+// ✅ Generate M-Pesa access token
 app.get("/token", async (req, res) => {
   try {
     const url =
       "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials";
+
     const auth = Buffer.from(
       `${process.env.CONSUMER_KEY}:${process.env.CONSUMER_SECRET}`
     ).toString("base64");
@@ -27,17 +29,17 @@ app.get("/token", async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error(error);
+    console.error("❌ Token Error:", error.response?.data || error.message);
     res.status(500).json({ error: "Failed to get token" });
   }
 });
 
-// STK Push endpoint
+// ✅ STK Push request
 app.post("/stkpush", async (req, res) => {
   try {
     const { phone, amount } = req.body;
 
-    // Get access token
+    // Step 1: Get access token
     const tokenResponse = await axios.get(
       "https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials",
       {
@@ -51,10 +53,12 @@ app.post("/stkpush", async (req, res) => {
 
     const accessToken = tokenResponse.data.access_token;
 
+    // Step 2: Prepare STK push payload
     const timestamp = new Date()
       .toISOString()
       .replace(/[^0-9]/g, "")
       .slice(0, 14);
+
     const password = Buffer.from(
       `${process.env.SHORTCODE}${process.env.PASSKEY}${timestamp}`
     ).toString("base64");
@@ -73,6 +77,7 @@ app.post("/stkpush", async (req, res) => {
       TransactionDesc: "Payment for goods",
     };
 
+    // Step 3: Send STK push request
     const response = await axios.post(
       "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest",
       stkRequest,
@@ -81,16 +86,16 @@ app.post("/stkpush", async (req, res) => {
 
     res.json(response.data);
   } catch (error) {
-    console.error(error.response?.data || error.message);
+    console.error("❌ STK Push Error:", error.response?.data || error.message);
     res.status(500).json({ error: "STK Push failed" });
   }
 });
 
-// Callback endpoint
+// ✅ Callback URL (Safaricom will POST here)
 app.post("/callback", (req, res) => {
-  console.log("🔔 Callback Data:", req.body);
+  console.log("🔔 M-Pesa Callback Data:", JSON.stringify(req.body, null, 2));
   res.json({ message: "Callback received successfully" });
 });
 
-// ✅ Correct export for Vercel
-export const handler = serverless(app);
+// ✅ Export for Vercel serverless function
+export default serverless(app);
