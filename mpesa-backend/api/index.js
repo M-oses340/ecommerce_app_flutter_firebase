@@ -1,9 +1,11 @@
+// api/index.js
 import express from "express";
 import serverless from "serverless-http";
 import axios from "axios";
 import dotenv from "dotenv";
 
 dotenv.config();
+
 const app = express();
 app.use(express.json());
 
@@ -90,11 +92,5 @@ app.post("/callback", (req, res) => {
   res.json({ message: "Callback received successfully" });
 });
 
-// Callback endpoint
-app.post("/callback", (req, res) => {
-  console.log("🔔 Callback Data:", req.body);
-  res.json({ message: "Callback received successfully" });
-});
-
-// Export for Vercel
-export default serverless(app);
+// ✅ Correct export for Vercel
+export const handler = serverless(app);
