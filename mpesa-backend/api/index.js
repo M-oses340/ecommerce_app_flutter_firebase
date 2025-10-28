@@ -90,5 +90,11 @@ app.post("/callback", (req, res) => {
   res.json({ message: "Callback received successfully" });
 });
 
-// Export serverless handler
-export const handler = serverless(app);
+// Callback endpoint
+app.post("/callback", (req, res) => {
+  console.log("🔔 Callback Data:", req.body);
+  res.json({ message: "Callback received successfully" });
+});
+
+// Export for Vercel
+export default serverless(app);
