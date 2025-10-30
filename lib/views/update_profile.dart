@@ -13,14 +13,12 @@ class UpdateProfile extends StatefulWidget {
 
 class _UpdateProfileState extends State<UpdateProfile> {
   final formKey = GlobalKey<FormState>();
-
   TextEditingController _nameController = TextEditingController();
   TextEditingController _emailController = TextEditingController();
   TextEditingController _addressController = TextEditingController();
   TextEditingController _phoneController = TextEditingController();
-  TextEditingController _currentPasswordController = TextEditingController();
 
-  bool _changeEmail = false;
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -29,7 +27,6 @@ class _UpdateProfileState extends State<UpdateProfile> {
     _emailController.text = user.email;
     _addressController.text = user.address;
     _phoneController.text = user.phone;
-
     super.initState();
   }
 
@@ -48,123 +45,90 @@ class _UpdateProfileState extends State<UpdateProfile> {
             padding: const EdgeInsets.all(8.0),
             child: Column(
               children: [
-                // Name
                 TextFormField(
                   controller: _nameController,
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
-                      labelText: "Name",
-                      hintText: "Name",
-                      border: OutlineInputBorder()),
+                    labelText: "Name",
+                    hintText: "Name",
+                    border: OutlineInputBorder(),
+                  ),
                   validator: (value) =>
                   value!.isEmpty ? "Name cannot be empty." : null,
                 ),
                 SizedBox(height: 10),
-
-                // Email
                 TextFormField(
                   controller: _emailController,
-                  readOnly: !_changeEmail,
+                  readOnly: true,
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
-                      labelText: "Email",
-                      hintText: "Email",
-                      border: OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _changeEmail ? Icons.lock_open : Icons.lock,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _changeEmail = !_changeEmail;
-                          });
-                        },
-                      )),
+                    labelText: "Email",
+                    hintText: "Email",
+                    border: OutlineInputBorder(),
+                  ),
                   validator: (value) =>
                   value!.isEmpty ? "Email cannot be empty." : null,
                 ),
                 SizedBox(height: 10),
-
-                // Current password (only if changing email)
-                if (_changeEmail)
-                  TextFormField(
-                    controller: _currentPasswordController,
-                    obscureText: true,
-                    decoration: InputDecoration(
-                        labelText: "Current Password",
-                        hintText: "Current Password",
-                        border: OutlineInputBorder()),
-                    validator: (value) => value!.isEmpty
-                        ? "Enter your current password to update email"
-                        : null,
-                  ),
-                if (_changeEmail) SizedBox(height: 10),
-
-                // Address
                 TextFormField(
-                  maxLines: 3,
                   controller: _addressController,
+                  maxLines: 3,
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
-                      labelText: "Address",
-                      hintText: "Address",
-                      border: OutlineInputBorder()),
+                    labelText: "Address",
+                    hintText: "Address",
+                    border: OutlineInputBorder(),
+                  ),
                   validator: (value) =>
                   value!.isEmpty ? "Address cannot be empty." : null,
                 ),
                 SizedBox(height: 10),
-
-                // Phone
                 TextFormField(
                   controller: _phoneController,
+                  enabled: !_isLoading,
                   decoration: InputDecoration(
-                      labelText: "Phone",
-                      hintText: "Phone",
-                      border: OutlineInputBorder()),
+                    labelText: "Phone",
+                    hintText: "Phone",
+                    border: OutlineInputBorder(),
+                  ),
                   validator: (value) =>
                   value!.isEmpty ? "Phone cannot be empty." : null,
                 ),
-                SizedBox(height: 10),
-
-                // Update button
+                SizedBox(height: 20),
                 SizedBox(
                   height: 60,
-                  width: MediaQuery.of(context).size.width * .9,
+                  width: MediaQuery.of(context).size.width * 0.9,
                   child: ElevatedButton(
-                           onPressed: () async{
-                             if (formKey.currentState!.validate()) {
-                               // Update email if changed
-                               if (_changeEmail &&
-                                   _emailController.text.trim() !=
-                                       Provider.of<UserProvider>(context, listen: false).email) {
-                                 String res = await AuthService().updateEmail(
-                                     newEmail: _emailController.text.trim(),
-                                     currentPassword: _currentPasswordController.text.trim());
+                    onPressed: _isLoading
+                        ? null
+                        : () async {
+                      if (formKey.currentState!.validate()) {
+                        setState(() {
+                          _isLoading = true;
+                        });
 
-                                 ScaffoldMessenger.of(context)
-                                     .showSnackBar(SnackBar(content: Text(res)));
+                        final data = {
+                          "name": _nameController.text,
+                          "email": _emailController.text,
+                          "address": _addressController.text,
+                          "phone": _phoneController.text,
+                        };
 
-                                 if (res.contains("Error")) return; // Stop if email fails
-                               }
+                        await DbService().updateUserData(extraData: data);
 
-                               // Always update name, address, phone in Firestore
-                               var data = {
-                                 "name": _nameController.text.trim(),
-                                 "address": _addressController.text.trim(),
-                                 "phone": _phoneController.text.trim(),
-                               };
+                        setState(() {
+                          _isLoading = false;
+                        });
 
-                               await DbService().updateUserData(extraData: data);
-
-                               Navigator.pop(context);
-                               ScaffoldMessenger.of(context)
-                                   .showSnackBar(SnackBar(content: Text("Profile Updated")));
-                             }
-
-                           },
-
-
-                    style: ElevatedButton.styleFrom(
-                        backgroundColor: Theme.of(context).primaryColor,
-                        foregroundColor: Colors.white),
-                    child: Text(
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text("Profile Updated")));
+                        Navigator.pop(context);
+                      }
+                    },
+                    child: _isLoading
+                        ? CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation(Colors.white))
+                        : Text(
                       "Update Profile",
                       style: TextStyle(fontSize: 16),
                     ),
