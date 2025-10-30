@@ -43,17 +43,14 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget statusContainer(
       {required String text,
       required Color bgColor,
-      required Color textColor}) {
-    return Container(
-      child: Text(
-        text,
-        style: TextStyle(color: textColor),
-      ),
-      color: bgColor,
-      padding: EdgeInsets.all(8),
-    );
+      required Color textColor})
+  {
+         return Container(
+           child: Text(text, style: TextStyle(color: textColor),),
+           color: bgColor,
+           padding: EdgeInsets.all(8),
+         );
   }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
