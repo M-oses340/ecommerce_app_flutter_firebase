@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ecommerce_app/contants/payment.dart';
 import 'package:ecommerce_app/controllers/db_service.dart';
@@ -24,6 +23,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   TextEditingController _mpesaPhoneController = TextEditingController();
 
   int discount = 0;
+  int toPay = 0;
   String discountText = "";
   bool paymentSuccess = false;
   Map<String, dynamic> dataOfOrder = {};
@@ -32,6 +32,121 @@ class _CheckoutPageState extends State<CheckoutPage> {
     discount = (disPercent * totalCost) ~/ 100;
     setState(() {});
   }
+
+  Future<void> initPaymentSheet(int cost) async {
+    try {
+      final user = Provider.of<UserProvider>(context, listen: false);
+      final data = await createPaymentIntent(
+        name: user.name,
+        address: user.address,
+        amount: (cost * 100).toString(),
+      );
+
+      await Stripe.instance.initPaymentSheet(
+        paymentSheetParameters: SetupPaymentSheetParameters(
+          customFlow: false,
+          merchantDisplayName: 'Ecommerce Flutter App',
+          paymentIntentClientSecret: data['client_secret'],
+          customerEphemeralKeySecret: data['ephemeralKey'],
+          customerId: data['id'],
+          style: ThemeMode.dark,
+        ),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Stripe Error: $e')),
+      );
+      rethrow;
+    }
+  }
+
+  Future<void> handleStripePayment(int cost) async {
+    await initPaymentSheet(cost);
+    try {
+      await Stripe.instance.presentPaymentSheet();
+      await createOrderAfterPayment("Stripe");
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Stripe payment failed: $e")),
+      );
+    }
+  }
+
+  Future<void> handleMpesaPayment(int cost) async {
+    try {
+      String phone = _mpesaPhoneController.text.trim();
+      if (phone.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Please enter your M-Pesa phone number")),
+        );
+        return;
+      }
+
+      final cart = Provider.of<CartProvider>(context, listen: false);
+      final user = Provider.of<UserProvider>(context, listen: false);
+      User? currentUser = FirebaseAuth.instance.currentUser;
+
+      // 🧾 Build products array with correct field names
+      List<Map<String, dynamic>> products = [];
+      for (int i = 0; i < cart.products.length; i++) {
+        final item = cart.products[i];
+        final qty = cart.carts[i].quantity;
+        products.add({
+          "id": item.id,
+          "image": item.image,
+          "name": item.name,
+          "quantity": qty,
+          "single_price": item.new_price,
+          "total_price": item.new_price * qty,
+        });
+      }
+
+      // 🧠 Firestore order data with your exact structure
+      Map<String, dynamic> orderData = {
+        "user_id": currentUser!.uid,
+        "name": user.name,
+        "email": user.email,
+        "phone": user.phone,
+        "address": user.address,
+        "discount": discount,
+        "total": cost,
+        "products": products,
+        "status": "ON_THE_WAY",
+        "payment_method": "M-Pesa (Pending)",
+        "created_at": DateTime.now().millisecondsSinceEpoch,
+      };
+
+      // 🔥 Create order in Firestore
+      final docRef =
+      await FirebaseFirestore.instance.collection("shop_orders").add(orderData);
+
+      String orderId = docRef.id;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Initiating M-Pesa payment...")),
+      );
+
+      // 📲 Trigger M-Pesa STK push
+      final response = await MpesaService.initiatePayment(
+        phone: phone,
+        amount: cost,
+        orderId: orderId, // so callback knows which order to update
+      );
+
+      if (response.containsKey("ResponseCode") && response["ResponseCode"] == "0") {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("STK Push sent! Check your phone.")),
+        );
+      } else {
+        throw Exception("M-Pesa initiation failed: ${response.toString()}");
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("M-Pesa Error: $e")),
+      );
+    }
+  }
+
 
   Future<void> createOrderAfterPayment(String method) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
@@ -45,7 +160,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
         "name": cart.products[i].name,
         "image": cart.products[i].image,
         "single_price": cart.products[i].new_price,
-        "total_price": cart.products[i].new_price * cart.carts[i].quantity,
+        "total_price":
+        cart.products[i].new_price * cart.carts[i].quantity,
         "quantity": cart.carts[i].quantity
       });
     }
@@ -87,65 +203,26 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
-  Future<void> handleMpesaPayment(int cost) async {
-    try {
-      String phone = _mpesaPhoneController.text.trim();
-      if (phone.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please enter your M-Pesa phone number")),
-        );
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Initiating M-Pesa payment...")),
-      );
-
-      final response = await MpesaService.initiatePayment(
-        phone: phone,
-        amount: cost,
-      );
-
-      // Response keys may vary depending on your Go backend return
-      if (response.containsKey("ResponseCode") && response["ResponseCode"] == "0") {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("STK Push sent! Check your phone to complete payment.")),
-        );
-        await createOrderAfterPayment("M-Pesa (Pending)");
-      } else {
-        throw Exception("M-Pesa initiation failed: ${jsonEncode(response)}");
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("M-Pesa Error: $e")),
-      );
-    }
-  }
-
-  Future<void> handleStripePayment(int cost) async {
-    // Keep your existing Stripe logic here
-    // ...
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("Checkout", style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
+        title: Text("Checkout", style: TextStyle(fontSize: 22)),
         scrolledUnderElevation: 0,
-        forceMaterialTransparency: true,
       ),
       body: SingleChildScrollView(
         child: Consumer<UserProvider>(
-          builder: (context, userData, child) => Consumer<CartProvider>(
-              builder: (context, cartData, child) {
+          builder: (context, userData, child) =>
+              Consumer<CartProvider>(builder: (context, cartData, child) {
                 int total = cartData.totalCost - discount;
                 return Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("Delivery Details", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                      Text("Delivery Details",
+                          style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                       Container(
                         padding: EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -158,7 +235,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(userData.name, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+                                Text(userData.name,
+                                    style: TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w500)),
                                 Text(userData.email),
                                 Text(userData.address),
                                 Text(userData.phone),
@@ -184,69 +264,72 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               controller: _couponController,
                               decoration: InputDecoration(
                                 labelText: "Coupon Code",
-                                hintText: "Enter Coupon for extra discount",
-                                border: InputBorder.none,
                                 filled: true,
                                 fillColor: Colors.grey.shade200,
                               ),
                             ),
                           ),
                           TextButton(
-                              onPressed: () async {
-                                QuerySnapshot querySnapshot = await DbService().verifyDiscount(
-                                    code: _couponController.text.toUpperCase());
-                                if (querySnapshot.docs.isNotEmpty) {
-                                  QueryDocumentSnapshot doc = querySnapshot.docs.first;
-                                  String code = doc.get('code');
-                                  int percent = doc.get('discount');
-                                  discountText = "a discount of $percent% has been applied.";
-                                  discountCalculator(percent, cartData.totalCost);
-                                } else {
-                                  discountText = "No discount code found";
-                                }
-                                setState(() {});
-                              },
-                              child: Text("Apply")
+                            onPressed: () async {
+                              QuerySnapshot querySnapshot = await DbService()
+                                  .verifyDiscount(
+                                  code:
+                                  _couponController.text.toUpperCase());
+                              if (querySnapshot.docs.isNotEmpty) {
+                                QueryDocumentSnapshot doc =
+                                    querySnapshot.docs.first;
+                                int percent = doc.get('discount');
+                                discountText =
+                                "a discount of $percent% has been applied.";
+                                discountCalculator(percent, cartData.totalCost);
+                              } else {
+                                discountText = "No discount code found";
+                              }
+                              setState(() {});
+                            },
+                            child: Text("Apply"),
                           )
                         ],
                       ),
                       if (discountText.isNotEmpty) Text(discountText),
                       Divider(),
-                      SizedBox(height: 10),
-                      Text("Total Quantity of Products: ${cartData.totalQuantity}", style: TextStyle(fontSize: 16)),
-                      Text("Sub Total: KSh ${cartData.totalCost}", style: TextStyle(fontSize: 16)),
+                      Text("Total Quantity: ${cartData.totalQuantity}"),
+                      Text("Sub Total: ₹ ${cartData.totalCost}"),
+                      Text("Extra Discount: - ₹ $discount"),
                       Divider(),
-                      Text("Extra Discount: - KSh $discount", style: TextStyle(fontSize: 16)),
-                      Divider(),
-                      Text("Total Payable: KSh $total", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                      Text("Total Payable: ₹ $total",
+                          style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
                       SizedBox(height: 20),
                       Text("Pay with M-Pesa"),
                       TextField(
                         controller: _mpesaPhoneController,
                         keyboardType: TextInputType.phone,
                         decoration: InputDecoration(
-                          hintText: "Enter M-Pesa phone number",
-                          filled: true,
-                          fillColor: Colors.grey.shade200,
-                        ),
+                            hintText: "Enter M-Pesa phone number",
+                            filled: true,
+                            fillColor: Colors.grey.shade200),
                       ),
                       SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: () => handleMpesaPayment(total),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white),
                         child: Text("Pay with M-Pesa"),
                       ),
                       SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: () => handleStripePayment(total),
-                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.blue,
+                            foregroundColor: Colors.white),
                         child: Text("Pay with Card (Stripe)"),
                       ),
                     ],
                   ),
                 );
-              }
-          ),
+              }),
         ),
       ),
     );
