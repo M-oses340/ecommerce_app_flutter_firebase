@@ -4,6 +4,8 @@ import 'package:ecommerce_admin_app/models/orders_model.dart';
 import 'package:ecommerce_admin_app/providers/admin_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:ecommerce_admin_app/utils/date_formatter.dart';
+
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -65,11 +67,8 @@ class _OrdersPageState extends State<OrdersPage> {
       ),
       body:Consumer<AdminProvider>(
         builder: (context, value, child) {
-           List<OrdersModel> orders =
-                OrdersModel.fromJsonList(value.orders)
-                    as List<OrdersModel>;
-
-            if (orders.isEmpty) {
+          List<OrdersModel> orders = OrdersModel.fromJsonList(value.orders);
+          if (orders.isEmpty) {
               return Center(
                 child: Text("No orders found"),
               );
@@ -85,7 +84,8 @@ class _OrdersPageState extends State<OrdersPage> {
                     title: Text(
                         "Order by ${orders[index].name} "),
                     subtitle: Text(
-                        "Ordered on ${DateTime.fromMillisecondsSinceEpoch(orders[index].created_at).toString()}"),
+                        "Ordered ${formatRelativeTime(orders[index].created_at)}"),
+
                     trailing: statusIcon(orders[index].status),
                   );
                 },
@@ -134,14 +134,14 @@ class _ViewOrderState extends State<ViewOrder> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text("Order Id : ${args.id}"),
-                    Text(
-                        "Order On : ${DateTime.fromMillisecondsSinceEpoch(args.created_at).toString()}"),
+                    Text("Ordered on: ${formatSmartDate(args.created_at)}"),
                     Text("Order by : ${args.name}"),
                     Text("Phone no : ${args.phone}"),
                     Text("Delivery Address : ${args.address}"),
                   ],
                 ),
               ),
+
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: args.products
