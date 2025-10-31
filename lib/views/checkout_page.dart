@@ -23,16 +23,17 @@ class _CheckoutPageState extends State<CheckoutPage> {
   TextEditingController _mpesaPhoneController = TextEditingController();
 
   int discount = 0;
-  int toPay = 0;
   String discountText = "";
   bool paymentSuccess = false;
-  Map<String, dynamic> dataOfOrder = {};
+  String? orderId; // ✅ Added orderId here
 
-  discountCalculator(int disPercent, int totalCost) {
+  // 🔹 Calculate Discount
+  void discountCalculator(int disPercent, int totalCost) {
     discount = (disPercent * totalCost) ~/ 100;
     setState(() {});
   }
 
+  // 🔹 Initialize Stripe Payment Sheet
   Future<void> initPaymentSheet(int cost) async {
     try {
       final user = Provider.of<UserProvider>(context, listen: false);
@@ -56,10 +57,10 @@ class _CheckoutPageState extends State<CheckoutPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Stripe Error: $e')),
       );
-      rethrow;
     }
   }
 
+  // 🔹 Handle Stripe Payment
   Future<void> handleStripePayment(int cost) async {
     await initPaymentSheet(cost);
     try {
@@ -72,6 +73,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
+  // 🔹 Handle M-Pesa Payment
   Future<void> handleMpesaPayment(int cost) async {
     try {
       String phone = _mpesaPhoneController.text.trim();
@@ -82,63 +84,35 @@ class _CheckoutPageState extends State<CheckoutPage> {
         return;
       }
 
-      final cart = Provider.of<CartProvider>(context, listen: false);
-      final user = Provider.of<UserProvider>(context, listen: false);
-      User? currentUser = FirebaseAuth.instance.currentUser;
-
-      // 🧾 Build products array with correct field names
-      List<Map<String, dynamic>> products = [];
-      for (int i = 0; i < cart.products.length; i++) {
-        final item = cart.products[i];
-        final qty = cart.carts[i].quantity;
-        products.add({
-          "id": item.id,
-          "image": item.image,
-          "name": item.name,
-          "quantity": qty,
-          "single_price": item.new_price,
-          "total_price": item.new_price * qty,
-        });
-      }
-
-      // 🧠 Firestore order data with your exact structure
-      Map<String, dynamic> orderData = {
-        "user_id": currentUser!.uid,
-        "name": user.name,
-        "email": user.email,
-        "phone": user.phone,
-        "address": user.address,
-        "discount": discount,
-        "total": cost,
-        "products": products,
-        "status": "ON_THE_WAY",
-        "payment_method": "M-Pesa (Pending)",
-        "created_at": DateTime.now().millisecondsSinceEpoch,
-      };
-
-      // 🔥 Create order in Firestore
-      final docRef =
-      await FirebaseFirestore.instance.collection("shop_orders").add(orderData);
-
-      String orderId = docRef.id;
-
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Initiating M-Pesa payment...")),
       );
 
-      // 📲 Trigger M-Pesa STK push
+      // ✅ Pre-create the order with PENDING payment before initiating M-Pesa
+      if (orderId == null) {
+        await createOrderAfterPayment("M-Pesa (Pending)", preCreateOnly: true);
+      }
+
       final response = await MpesaService.initiatePayment(
         phone: phone,
         amount: cost,
-        orderId: orderId, // so callback knows which order to update
+        orderId: orderId!,
       );
 
-      if (response.containsKey("ResponseCode") && response["ResponseCode"] == "0") {
+      if (response.containsKey("ResponseCode") &&
+          response["ResponseCode"] == "0") {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("STK Push sent! Check your phone.")),
+          SnackBar(
+              content: Text(
+                  "STK Push sent! Check your phone to complete payment.")),
         );
+        await DbService().updateOrderStatus(
+          docId: orderId!,
+          data: {"status": "PAID"},
+        );
+        await afterPaymentSuccess("M-Pesa");
       } else {
-        throw Exception("M-Pesa initiation failed: ${response.toString()}");
+        throw Exception("M-Pesa initiation failed");
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -147,8 +121,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-
-  Future<void> createOrderAfterPayment(String method) async {
+  // 🔹 Create Order in Firestore
+  Future<void> createOrderAfterPayment(String method,
+      {bool preCreateOnly = false}) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final user = Provider.of<UserProvider>(context, listen: false);
     User? currentUser = FirebaseAuth.instance.currentUser;
@@ -160,8 +135,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
         "name": cart.products[i].name,
         "image": cart.products[i].image,
         "single_price": cart.products[i].new_price,
-        "total_price":
-        cart.products[i].new_price * cart.carts[i].quantity,
+        "total_price": cart.products[i].new_price * cart.carts[i].quantity,
         "quantity": cart.carts[i].quantity
       });
     }
@@ -180,21 +154,40 @@ class _CheckoutPageState extends State<CheckoutPage> {
       "created_at": DateTime.now().millisecondsSinceEpoch
     };
 
-    await DbService().createOrder(data: orderData);
+    // ✅ Create new order and store its ID
+    if (orderId == null) {
+      final orderRef = await DbService().createOrder(data: orderData);
+      orderId = orderRef.id;
+    } else if (!preCreateOnly) {
+      await DbService().updateOrderStatus(
+        docId: orderId!,
+        data: {"status": "PAID"},
+      );
+    }
+
+    if (!preCreateOnly) {
+      await afterPaymentSuccess(method);
+    }
+  }
+
+  // 🔹 Shared logic after successful payment
+  Future<void> afterPaymentSuccess(String method) async {
+    final cart = Provider.of<CartProvider>(context, listen: false);
+    final user = Provider.of<UserProvider>(context, listen: false);
 
     for (int i = 0; i < cart.products.length; i++) {
-      DbService().reduceQuantity(
-          productId: cart.products[i].id,
-          quantity: cart.carts[i].quantity);
+      await DbService().reduceQuantity(
+        productId: cart.products[i].id,
+        quantity: cart.carts[i].quantity,
+      );
     }
 
     await DbService().emptyCart();
     paymentSuccess = true;
-    dataOfOrder = orderData;
 
     if (paymentSuccess) {
-      MailService().sendMailFromGmail(
-          user.email, OrdersModel.fromJson(dataOfOrder, ""));
+      MailService()
+          .sendMailFromGmail(user.email, OrdersModel.fromJson({}, orderId!));
     }
 
     Navigator.pop(context);
@@ -203,6 +196,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
     );
   }
 
+  // 🔹 UI
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -280,8 +274,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                     querySnapshot.docs.first;
                                 int percent = doc.get('discount');
                                 discountText =
-                                "a discount of $percent% has been applied.";
-                                discountCalculator(percent, cartData.totalCost);
+                                "A discount of $percent% has been applied.";
+                                discountCalculator(
+                                    percent, cartData.totalCost);
                               } else {
                                 discountText = "No discount code found";
                               }
@@ -298,8 +293,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       Text("Extra Discount: - ₹ $discount"),
                       Divider(),
                       Text("Total Payable: ₹ $total",
-                          style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                          style: TextStyle(
+                              fontSize: 18, fontWeight: FontWeight.w500)),
                       SizedBox(height: 20),
                       Text("Pay with M-Pesa"),
                       TextField(

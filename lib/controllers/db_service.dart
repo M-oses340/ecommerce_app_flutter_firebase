@@ -9,83 +9,25 @@ class DbService {
   // 🔹 USER DATA
   // ============================
 
-  /// Save user data when a new account is created
   Future<void> saveUserData({
     required String name,
     required String email,
   }) async {
-    try {
-      final data = {
-        "name": name,
-        "email": email,
-        "address": "",
-        "phone": "",
-      };
-      await FirebaseFirestore.instance
-          .collection("shop_users")
-          .doc(user!.uid)
-          .set(data);
-    } catch (e) {
-      print("⚠️ Error saving user data: $e");
-    }
+    final data = {"name": name, "email": email, "address": "", "phone": ""};
+    await FirebaseFirestore.instance
+        .collection("shop_users")
+        .doc(user!.uid)
+        .set(data);
   }
 
-  /// Update user data fields (name, phone, address, etc.)
-  /// Update user data across all relevant documents
   Future<void> updateUserData({required Map<String, dynamic> extraData}) async {
     final uid = user!.uid;
-
-    // 1️⃣ Update main profile
-    try {
-      await FirebaseFirestore.instance
-          .collection("shop_users")
-          .doc(uid)
-          .update(extraData);
-    } catch (e) {
-      print("⚠️ Error updating main user profile: $e");
-    }
-
-    // 2️⃣ Update previous orders referencing this user
-    try {
-      final ordersSnapshot = await FirebaseFirestore.instance
-          .collection("shop_orders")
-          .where("user_id", isEqualTo: uid)
-          .get();
-
-      for (var doc in ordersSnapshot.docs) {
-        await doc.reference.update({
-          "name": extraData["name"] ?? doc["name"],
-          "email": extraData["email"] ?? doc["email"],
-          "phone": extraData["phone"] ?? doc["phone"],
-          "address": extraData["address"] ?? doc["address"],
-        });
-      }
-    } catch (e) {
-      print("⚠️ Error updating user info in orders: $e");
-    }
-
-    // 3️⃣ Optionally, update other collections (cart, reviews, etc.)
-    // Example: update cart documents
-    try {
-      final cartSnapshot = await FirebaseFirestore.instance
-          .collection("shop_users")
-          .doc(uid)
-          .collection("cart")
-          .get();
-
-      for (var doc in cartSnapshot.docs) {
-        await doc.reference.update({
-          "user_name": extraData["name"] ?? "",
-          "user_email": extraData["email"] ?? "",
-        });
-      }
-    } catch (e) {
-      print("⚠️ Error updating user info in cart: $e");
-    }
+    await FirebaseFirestore.instance
+        .collection("shop_users")
+        .doc(uid)
+        .update(extraData);
   }
 
-
-  /// Read user data in real time
   Stream<DocumentSnapshot> readUserData() {
     return FirebaseFirestore.instance
         .collection("shop_users")
@@ -152,10 +94,14 @@ class DbService {
     required String productId,
     required int quantity,
   }) async {
-    await FirebaseFirestore.instance
-        .collection("shop_products")
-        .doc(productId)
-        .update({"quantity": FieldValue.increment(-quantity)});
+    final productRef =
+    FirebaseFirestore.instance.collection("shop_products").doc(productId);
+    final doc = await productRef.get();
+    if (doc.exists) {
+      int currentStock = doc["maxQuantity"];
+      int newStock = currentStock - quantity;
+      await productRef.update({"maxQuantity": newStock});
+    }
   }
 
   // ============================
@@ -205,18 +151,6 @@ class DbService {
         .delete();
   }
 
-  Future<void> emptyCart() async {
-    final cartRef = FirebaseFirestore.instance
-        .collection("shop_users")
-        .doc(user!.uid)
-        .collection("cart");
-
-    final items = await cartRef.get();
-    for (var doc in items.docs) {
-      await doc.reference.delete();
-    }
-  }
-
   Future<void> decreaseCount({required String productId}) async {
     await FirebaseFirestore.instance
         .collection("shop_users")
@@ -226,16 +160,28 @@ class DbService {
         .update({"quantity": FieldValue.increment(-1)});
   }
 
+  Future<void> emptyCart() async {
+    final cartRef = FirebaseFirestore.instance
+        .collection("shop_users")
+        .doc(user!.uid)
+        .collection("cart");
+
+    final snapshot = await cartRef.get();
+    WriteBatch batch = FirebaseFirestore.instance.batch();
+    for (var doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
   // ============================
   // 🔹 ORDERS
   // ============================
 
-  /// Create a new order
-  Future<void> createOrder({required Map<String, dynamic> data}) async {
-    await FirebaseFirestore.instance.collection("shop_orders").add(data);
+  Future<DocumentReference> createOrder({required Map<String, dynamic> data}) async {
+    return await FirebaseFirestore.instance.collection("shop_orders").add(data);
   }
 
-  /// Update order status (used by admin)
   Future<void> updateOrderStatus({
     required String docId,
     required Map<String, dynamic> data,
@@ -246,7 +192,6 @@ class DbService {
         .update(data);
   }
 
-  /// Read all orders for the logged-in user
   Stream<QuerySnapshot> readOrders() {
     return FirebaseFirestore.instance
         .collection("shop_orders")
@@ -256,10 +201,9 @@ class DbService {
   }
 
   // ============================
-  // 🔹 ADMIN HELPERS (OPTIONAL)
+  // 🔹 ADMIN HELPERS
   // ============================
 
-  /// Read all orders (for admin dashboard)
   Stream<QuerySnapshot> readAllOrders() {
     return FirebaseFirestore.instance
         .collection("shop_orders")

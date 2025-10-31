@@ -57,7 +57,7 @@ class MyApp extends StatelessWidget {
         title: 'eCommerce App',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-          
+
           // This is the theme of your application.
           //
           // TRY THIS: Try running your application with "flutter run". You'll see
@@ -80,7 +80,7 @@ class MyApp extends StatelessWidget {
           "/":(context)=> CheckUser(),
           "/login": (context)=> LoginPage(),
           "/home": (context)=> HomeNav(),
-          "/signup": (context)=> SingupPage(),
+          "/signup": (context)=> SignupPage(),
           "/update_profile":(context)=> UpdateProfile(),
           "/discount": (context)=> DiscountPage(),
           "/specific": (context)=> SpecificProducts(),
@@ -90,7 +90,7 @@ class MyApp extends StatelessWidget {
           "/orders":(context)=> OrdersPage(),
           "/view_order":(context)=> ViewOrder(),
         },
-       
+
       ),
     );
   }
