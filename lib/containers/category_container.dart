@@ -18,10 +18,9 @@ class _CategoryContainerState extends State<CategoryContainer> {
         builder: (context, snapshot) {
           if (snapshot.hasData) {
             List<CategoriesModel> categories =
-                CategoriesModel.fromJsonList(snapshot.data!.docs)
-                    as List<CategoriesModel>;
+                CategoriesModel.fromJsonList(snapshot.data!.docs);
             if (categories.isEmpty) {
-              return SizedBox();
+              return const SizedBox();
             } else {
               return SingleChildScrollView(
                 scrollDirection:  Axis.horizontal,
@@ -34,7 +33,7 @@ class _CategoryContainerState extends State<CategoryContainer> {
               );
             }
           } else {
-             return Shimmer(child: Container(height: 90,width: double.infinity,), gradient: LinearGradient(colors: [Colors.grey.shade200,Colors.white]));
+             return Shimmer(gradient: LinearGradient(colors: [Colors.grey.shade200,Colors.white]), child: const SizedBox(height: 90,width: double.infinity,));
           }
         });
   }
@@ -57,8 +56,8 @@ class _CategoryButtonState extends State<CategoryButton> {
         "name":widget.name
       }),
       child: Container(
-        margin: EdgeInsets.all(4),
-        padding:  EdgeInsets.all(4),
+        margin: const EdgeInsets.all(4),
+        padding:  const EdgeInsets.all(4),
         height: 95,
         width: 95,
         decoration:  BoxDecoration(
@@ -69,7 +68,7 @@ class _CategoryButtonState extends State<CategoryButton> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [Image.network(widget.imagepath,height: 50,),
-          SizedBox(height: 8,),
+          const SizedBox(height: 8,),
            Text("${widget.name.substring(0,1).toUpperCase()}${widget.name.substring(1)} ")],
         ),
       ),
