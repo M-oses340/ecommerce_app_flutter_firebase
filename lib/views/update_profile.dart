@@ -85,11 +85,11 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
   void _startFadeSequence() {
     const delayStep = 400;
     Future.delayed(const Duration(milliseconds: 200), () => setState(() => _nameOpacity = 1.0));
-    Future.delayed(Duration(milliseconds: 200 + delayStep), () => setState(() => _emailOpacity = 1.0));
-    Future.delayed(Duration(milliseconds: 200 + 2 * delayStep), () => setState(() => _passwordOpacity = 1.0));
-    Future.delayed(Duration(milliseconds: 200 + 3 * delayStep), () => setState(() => _addressOpacity = 1.0));
-    Future.delayed(Duration(milliseconds: 200 + 4 * delayStep), () => setState(() => _phoneOpacity = 1.0));
-    Future.delayed(Duration(milliseconds: 200 + 5 * delayStep), () => setState(() => _buttonOpacity = 1.0));
+    Future.delayed(const Duration(milliseconds: 200 + delayStep), () => setState(() => _emailOpacity = 1.0));
+    Future.delayed(const Duration(milliseconds: 200 + 2 * delayStep), () => setState(() => _passwordOpacity = 1.0));
+    Future.delayed(const Duration(milliseconds: 200 + 3 * delayStep), () => setState(() => _addressOpacity = 1.0));
+    Future.delayed(const Duration(milliseconds: 200 + 4 * delayStep), () => setState(() => _phoneOpacity = 1.0));
+    Future.delayed(const Duration(milliseconds: 200 + 5 * delayStep), () => setState(() => _buttonOpacity = 1.0));
   }
 
   @override
