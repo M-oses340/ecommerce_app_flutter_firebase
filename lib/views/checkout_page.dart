@@ -77,6 +77,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   Future<void> handleMpesaPayment(int cost) async {
     try {
       String phone = _mpesaPhoneController.text.trim();
+
       if (phone.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Please enter your M-Pesa phone number")),
@@ -88,31 +89,33 @@ class _CheckoutPageState extends State<CheckoutPage> {
         SnackBar(content: Text("Initiating M-Pesa payment...")),
       );
 
-      // ✅ Pre-create the order with PENDING payment before initiating M-Pesa
+      // ✅ 1. Pre-create the order if it doesn’t exist
       if (orderId == null) {
-        await createOrderAfterPayment("M-Pesa (Pending)", preCreateOnly: true);
+        orderId = await createOrderAfterPayment("M-Pesa (Pending)", preCreateOnly: true);
       }
 
+      // ✅ 2. Initiate STK Push (pass the same Firestore orderId)
       final response = await MpesaService.initiatePayment(
         phone: phone,
         amount: cost,
-        orderId: orderId!,
+        orderId: orderId!, // must be the Firestore doc ID
       );
 
-      if (response.containsKey("ResponseCode") &&
-          response["ResponseCode"] == "0") {
+      // ✅ 3. Handle M-Pesa API response
+      if (response["ResponseCode"] == "0") {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content: Text(
-                  "STK Push sent! Check your phone to complete payment.")),
+            content: Text("STK Push sent! Check your phone to complete payment."),
+          ),
         );
+
+        // ⚠️ Don't mark as PAID yet — payment is only confirmed via callback
         await DbService().updateOrderStatus(
           docId: orderId!,
-          data: {"status": "PAID"},
+          data: {"payment_method": "M-Pesa (Pending)", "status": "PENDING"},
         );
-        await afterPaymentSuccess("M-Pesa");
       } else {
-        throw Exception("M-Pesa initiation failed");
+        throw Exception(response["errorMessage"] ?? "M-Pesa initiation failed");
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -122,7 +125,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
   }
 
   // 🔹 Create Order in Firestore
-  Future<void> createOrderAfterPayment(String method,
+  Future<String> createOrderAfterPayment(String method,
       {bool preCreateOnly = false}) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final user = Provider.of<UserProvider>(context, listen: false);
@@ -154,7 +157,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
       "created_at": DateTime.now().millisecondsSinceEpoch
     };
 
-    // ✅ Create new order and store its ID
+    // ✅ Create new order if not already created
     if (orderId == null) {
       final orderRef = await DbService().createOrder(data: orderData);
       orderId = orderRef.id;
@@ -168,7 +171,11 @@ class _CheckoutPageState extends State<CheckoutPage> {
     if (!preCreateOnly) {
       await afterPaymentSuccess(method);
     }
+
+    // ✅ Return Firestore document ID so caller can use it
+    return orderId!;
   }
+
 
   // 🔹 Shared logic after successful payment
   Future<void> afterPaymentSuccess(String method) async {
@@ -313,13 +320,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
                             foregroundColor: Colors.white),
                         child: Text("Pay with M-Pesa"),
                       ),
-                      SizedBox(height: 10),
+                      const SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: () => handleStripePayment(total),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.blue,
                             foregroundColor: Colors.white),
-                        child: Text("Pay with Card (Stripe)"),
+                        child: const Text("Pay with Card (Stripe)"),
                       ),
                     ],
                   ),

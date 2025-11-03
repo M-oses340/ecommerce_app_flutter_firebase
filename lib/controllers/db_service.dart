@@ -1,9 +1,12 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ecommerce_app/models/cart_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class DbService {
-  final User? user = FirebaseAuth.instance.currentUser;
+  /// ✅ Always fetch current user dynamically
+  String? get uid => FirebaseAuth.instance.currentUser?.uid;
 
   // ============================
   // 🔹 USER DATA
@@ -13,95 +16,54 @@ class DbService {
     required String name,
     required String email,
   }) async {
-    final data = {"name": name, "email": email, "address": "", "phone": ""};
+    final userId = uid;
+    if (userId == null) throw Exception("No user logged in");
+
+    final data = {
+      "name": name,
+      "email": email,
+      "address": "",
+      "phone": "",
+      "profileImage": "",
+    };
+
     await FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .set(data);
   }
 
   Future<void> updateUserData({required Map<String, dynamic> extraData}) async {
-    final uid = user!.uid;
+    final userId = uid;
+    if (userId == null) throw Exception("No user logged in");
+
     await FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(uid)
+        .doc(userId)
         .update(extraData);
   }
 
   Stream<DocumentSnapshot> readUserData() {
+    final userId = uid;
+    if (userId == null) return const Stream.empty(); // safe fallback
+
     return FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .snapshots();
   }
 
-  // ============================
-  // 🔹 PROMOS & BANNERS
-  // ============================
+  Future<String> uploadProfileImage(File imageFile) async {
+    final userId = uid;
+    if (userId == null) throw Exception("No user logged in");
 
-  Stream<QuerySnapshot> readPromos() {
-    return FirebaseFirestore.instance.collection("shop_promos").snapshots();
-  }
+    final ref = FirebaseStorage.instance
+        .ref()
+        .child("profile_images")
+        .child("$userId.jpg");
 
-  Stream<QuerySnapshot> readBanners() {
-    return FirebaseFirestore.instance.collection("shop_banners").snapshots();
-  }
-
-  // ============================
-  // 🔹 DISCOUNTS
-  // ============================
-
-  Stream<QuerySnapshot> readDiscounts() {
-    return FirebaseFirestore.instance
-        .collection("shop_coupons")
-        .orderBy("discount", descending: true)
-        .snapshots();
-  }
-
-  Future<QuerySnapshot> verifyDiscount({required String code}) {
-    return FirebaseFirestore.instance
-        .collection("shop_coupons")
-        .where("code", isEqualTo: code)
-        .get();
-  }
-
-  // ============================
-  // 🔹 CATEGORIES & PRODUCTS
-  // ============================
-
-  Stream<QuerySnapshot> readCategories() {
-    return FirebaseFirestore.instance
-        .collection("shop_categories")
-        .orderBy("priority", descending: true)
-        .snapshots();
-  }
-
-  Stream<QuerySnapshot> readProducts(String category) {
-    return FirebaseFirestore.instance
-        .collection("shop_products")
-        .where("category", isEqualTo: category.toLowerCase())
-        .snapshots();
-  }
-
-  Stream<QuerySnapshot> searchProducts(List<String> docIds) {
-    return FirebaseFirestore.instance
-        .collection("shop_products")
-        .where(FieldPath.documentId, whereIn: docIds)
-        .snapshots();
-  }
-
-  Future<void> reduceQuantity({
-    required String productId,
-    required int quantity,
-  }) async {
-    final productRef =
-    FirebaseFirestore.instance.collection("shop_products").doc(productId);
-    final doc = await productRef.get();
-    if (doc.exists) {
-      int currentStock = doc["maxQuantity"];
-      int newStock = currentStock - quantity;
-      await productRef.update({"maxQuantity": newStock});
-    }
+    await ref.putFile(imageFile);
+    return await ref.getDownloadURL();
   }
 
   // ============================
@@ -109,18 +71,24 @@ class DbService {
   // ============================
 
   Stream<QuerySnapshot> readUserCart() {
+    final userId = uid;
+    if (userId == null) return const Stream.empty();
+
     return FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .collection("cart")
         .snapshots();
   }
 
   Future<void> addToCart({required CartModel cartData}) async {
+    final userId = uid;
+    if (userId == null) return;
+
     try {
       await FirebaseFirestore.instance
           .collection("shop_users")
-          .doc(user!.uid)
+          .doc(userId)
           .collection("cart")
           .doc(cartData.productId)
           .update({
@@ -131,7 +99,7 @@ class DbService {
       if (e.code == "not-found") {
         await FirebaseFirestore.instance
             .collection("shop_users")
-            .doc(user!.uid)
+            .doc(userId)
             .collection("cart")
             .doc(cartData.productId)
             .set({
@@ -143,27 +111,53 @@ class DbService {
   }
 
   Future<void> deleteItemFromCart({required String productId}) async {
+    final userId = uid;
+    if (userId == null) return;
+
     await FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .collection("cart")
         .doc(productId)
         .delete();
   }
+  /// 🔹 Reduce product quantity in stock
+  Future<void> reduceQuantity({
+    required String productId,
+    required int quantity,
+  }) async {
+    final userId = uid; // not used here, but keeping pattern
+    final productRef = FirebaseFirestore.instance.collection("shop_products").doc(productId);
+
+    final doc = await productRef.get();
+    if (doc.exists) {
+      int currentStock = doc["maxQuantity"] ?? 0;
+      int newStock = currentStock - quantity;
+      if (newStock < 0) newStock = 0;
+      await productRef.update({"maxQuantity": newStock});
+    }
+  }
+
 
   Future<void> decreaseCount({required String productId}) async {
+    final userId = uid;
+    if (userId == null) return;
+
     await FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .collection("cart")
         .doc(productId)
         .update({"quantity": FieldValue.increment(-1)});
   }
 
   Future<void> emptyCart() async {
+    final userId = uid;
+    if (userId == null) return;
+
     final cartRef = FirebaseFirestore.instance
         .collection("shop_users")
-        .doc(user!.uid)
+        .doc(userId)
         .collection("cart");
 
     final snapshot = await cartRef.get();
@@ -178,6 +172,17 @@ class DbService {
   // 🔹 ORDERS
   // ============================
 
+  Stream<QuerySnapshot> readOrders() {
+    final userId = uid;
+    if (userId == null) return const Stream.empty();
+
+    return FirebaseFirestore.instance
+        .collection("shop_orders")
+        .where("user_id", isEqualTo: userId)
+        .orderBy("created_at", descending: true)
+        .snapshots();
+  }
+
   Future<DocumentReference> createOrder({required Map<String, dynamic> data}) async {
     return await FirebaseFirestore.instance.collection("shop_orders").add(data);
   }
@@ -186,28 +191,33 @@ class DbService {
     required String docId,
     required Map<String, dynamic> data,
   }) async {
-    await FirebaseFirestore.instance
-        .collection("shop_orders")
-        .doc(docId)
-        .update(data);
-  }
-
-  Stream<QuerySnapshot> readOrders() {
-    return FirebaseFirestore.instance
-        .collection("shop_orders")
-        .where("user_id", isEqualTo: user!.uid)
-        .orderBy("created_at", descending: true)
-        .snapshots();
+    await FirebaseFirestore.instance.collection("shop_orders").doc(docId).update(data);
   }
 
   // ============================
-  // 🔹 ADMIN HELPERS
+  // 🔹 OTHER STREAMS
   // ============================
 
-  Stream<QuerySnapshot> readAllOrders() {
-    return FirebaseFirestore.instance
-        .collection("shop_orders")
-        .orderBy("created_at", descending: true)
-        .snapshots();
-  }
+  Stream<QuerySnapshot> readPromos() => FirebaseFirestore.instance.collection("shop_promos").snapshots();
+
+  Stream<QuerySnapshot> readBanners() => FirebaseFirestore.instance.collection("shop_banners").snapshots();
+
+  Stream<QuerySnapshot> readDiscounts() => FirebaseFirestore.instance
+      .collection("shop_coupons")
+      .orderBy("discount", descending: true)
+      .snapshots();
+
+  Future<QuerySnapshot> verifyDiscount({required String code}) =>
+      FirebaseFirestore.instance.collection("shop_coupons").where("code", isEqualTo: code).get();
+
+  Stream<QuerySnapshot> readCategories() => FirebaseFirestore.instance
+      .collection("shop_categories")
+      .orderBy("priority", descending: true)
+      .snapshots();
+
+  Stream<QuerySnapshot> readProducts(String category) =>
+      FirebaseFirestore.instance.collection("shop_products").where("category", isEqualTo: category.toLowerCase()).snapshots();
+
+  Stream<QuerySnapshot> searchProducts(List<String> docIds) =>
+      FirebaseFirestore.instance.collection("shop_products").where(FieldPath.documentId, whereIn: docIds).snapshots();
 }

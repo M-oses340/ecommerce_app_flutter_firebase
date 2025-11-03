@@ -7,15 +7,17 @@ import 'package:provider/provider.dart';
 class CartContainer extends StatefulWidget {
   final String image, name, productId;
   final int new_price, old_price, maxQuantity, selectedQuantity;
-  const CartContainer(
-      {super.key,
-      required this.image,
-      required this.name,
-      required this.productId,
-      required this.new_price,
-      required this.old_price,
-      required this.maxQuantity,
-      required this.selectedQuantity});
+
+  const CartContainer({
+    super.key,
+    required this.image,
+    required this.name,
+    required this.productId,
+    required this.new_price,
+    required this.old_price,
+    required this.maxQuantity,
+    required this.selectedQuantity,
+  });
 
   @override
   State<CartContainer> createState() => _CartContainerState();
@@ -24,22 +26,31 @@ class CartContainer extends StatefulWidget {
 class _CartContainerState extends State<CartContainer> {
   int count = 1;
 
+  @override
+  void initState() {
+    count = widget.selectedQuantity;
+    super.initState();
+  }
+
+  // ✅ Increase quantity
   increaseCount(int max) async {
     if (count >= max) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("Maximum Quantity reached"),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Maximum quantity reached")),
+      );
       return;
     } else {
-      Provider.of<CartProvider>(context, listen: false)
-          .addToCart(CartModel(productId: widget.productId, quantity: count));
+      Provider.of<CartProvider>(context, listen: false).addToCart(
+        CartModel(productId: widget.productId, quantity: count),
+      );
       setState(() {
         count++;
       });
     }
   }
 
- decreaseCount() async {
+  // ✅ Decrease quantity
+  decreaseCount() async {
     if (count > 1) {
       Provider.of<CartProvider>(context, listen: false)
           .decreaseCount(widget.productId);
@@ -49,161 +60,169 @@ class _CartContainerState extends State<CartContainer> {
     }
   }
 
-  @override
-  void initState() {
-    count=widget.selectedQuantity;
-    super.initState();
+  // ✅ Confirm remove dialog
+  Future<void> _confirmRemove(BuildContext context) async {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Remove Item"),
+        content: Text(
+          "Are you sure you want to remove '${widget.name}' from your cart?",
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Provider.of<CartProvider>(context, listen: false)
+                  .deleteItem(widget.productId);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text("'${widget.name}' removed from cart"),
+                  backgroundColor: Colors.redAccent,
+                ),
+              );
+            },
+            child: const Text("Remove"),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Card(
+      margin: const EdgeInsets.all(10),
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Container(
         width: double.infinity,
-        padding: EdgeInsets.all(10),
-        margin: EdgeInsets.all(10),
+        padding: const EdgeInsets.all(10),
         child: Column(
           children: [
+            // 🛒 Product row
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Container(
-                    height: 80, width: 80, child: Image.network(widget.image)),
                 SizedBox(
-                  width: 10,
+                  height: 80,
+                  width: 80,
+                  child: Image.network(widget.image, fit: BoxFit.cover),
                 ),
+                const SizedBox(width: 10),
+                // 🏷️ Product info
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                          child: Text(
+                      Text(
                         widget.name,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
+                        style: const TextStyle(
                             fontSize: 16, fontWeight: FontWeight.w600),
-                      )),
-                      SizedBox(
-                        height: 6,
                       ),
+                      const SizedBox(height: 6),
                       Row(
                         children: [
-                          SizedBox(
-                            width: 2,
-                          ),
                           Text(
-                            "\₹${widget.old_price}",
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w500,
-                                decoration: TextDecoration.lineThrough),
+                            "₹${widget.old_price}",
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w500,
+                              decoration: TextDecoration.lineThrough,
+                            ),
                           ),
-                          SizedBox(
-                            width: 8,
-                          ),
+                          const SizedBox(width: 8),
                           Text(
-                            "\₹${widget.new_price}",
-                            style: TextStyle(
+                            "₹${widget.new_price}",
+                            style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                           ),
-                          SizedBox(
-                            width: 8,
-                          ),
-                          Icon(
-                            Icons.arrow_downward,
-                            color: Colors.green,
-                            size: 20,
-                          ),
+                          const SizedBox(width: 8),
+                          const Icon(Icons.arrow_downward,
+                              color: Colors.green, size: 20),
                           Text(
                             "${discountPercent(widget.old_price, widget.new_price)}%",
-                            style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.green),
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
                           ),
                         ],
-                      )
+                      ),
                     ],
                   ),
                 ),
+                // 🗑️ Delete icon with confirmation
                 IconButton(
-                    onPressed: () async {
-                      Provider.of<CartProvider>(context, listen: false)
-                          .deleteItem(widget.productId);
-                    },
-                    icon: Icon(
-                      Icons.delete,
-                      color: Colors.red.shade400,
-                    ))
+                  icon: Icon(Icons.delete, color: Colors.red.shade400),
+                  onPressed: () => _confirmRemove(context),
+                ),
               ],
             ),
-            SizedBox(
-              height: 16,
-            ),
+
+            const SizedBox(height: 16),
+
+            // 🔢 Quantity controls
             Row(
               children: [
-                Text(
+                const Text(
                   "Quantity:",
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
                 ),
-                SizedBox(
-                  width: 8,
-                ),
-                Container(
-                  height: 40,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.grey.shade300,
-                  ),
-                  child: IconButton(
-                      onPressed: () async {
-                        increaseCount(widget.maxQuantity);
-                      },
-                      icon: Icon(Icons.add)),
-                ),
-                SizedBox(
-                  width: 8,
-                ),
+                const SizedBox(width: 8),
+                _buildQuantityButton(Icons.add, () {
+                  increaseCount(widget.maxQuantity);
+                }),
+                const SizedBox(width: 8),
                 Text(
                   "$count",
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                      fontSize: 20, fontWeight: FontWeight.bold),
                 ),
-                SizedBox(
-                  width: 8,
-                ),
-                Container(
-                  height: 40,
-                  width: 40,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(10),
-                    color: Colors.grey.shade300,
-                  ),
-                  child: IconButton(
-                      onPressed: () async {
-                        decreaseCount();
-                       
-                      },
-                      icon: Icon(Icons.remove)),
-                ),
-                SizedBox(
-                  width: 8,
-                ),
-                Spacer(),
-                Text("Total:"),
-                SizedBox(
-                  width: 8,
-                ),
+                const SizedBox(width: 8),
+                _buildQuantityButton(Icons.remove, () {
+                  decreaseCount();
+                }),
+                const Spacer(),
+                const Text("Total:"),
+                const SizedBox(width: 8),
                 Text(
-                  "\₹${widget.new_price * count}",
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+                  "₹${widget.new_price * count}",
+                  style: const TextStyle(
+                      fontSize: 24, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  /// Helper to build rounded quantity buttons
+  Widget _buildQuantityButton(IconData icon, VoidCallback onTap) {
+    return Container(
+      height: 40,
+      width: 40,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(10),
+        color: Colors.grey.shade300,
+      ),
+      child: IconButton(
+        onPressed: onTap,
+        icon: Icon(icon),
       ),
     );
   }

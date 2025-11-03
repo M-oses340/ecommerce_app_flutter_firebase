@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:ecommerce_app/controllers/auth_service.dart';
 import 'package:ecommerce_app/firebase_options.dart';
 import 'package:ecommerce_app/providers/cart_provider.dart';
@@ -5,7 +6,6 @@ import 'package:ecommerce_app/providers/user_provider.dart';
 import 'package:ecommerce_app/views/cart_page.dart';
 import 'package:ecommerce_app/views/checkout_page.dart';
 import 'package:ecommerce_app/views/discount_page.dart';
-import 'package:ecommerce_app/views/home.dart';
 import 'package:ecommerce_app/views/home_nav.dart';
 import 'package:ecommerce_app/views/login.dart';
 import 'package:ecommerce_app/views/orders_page.dart';
@@ -19,7 +19,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 
-void main() async {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(
@@ -41,62 +41,156 @@ void main() async {
   runApp(const MyApp());
 }
 
-
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (context) =>  UserProvider(),),
-        ChangeNotifierProvider(create: (context) =>  CartProvider(),),
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => CartProvider()),
       ],
       child: MaterialApp(
         title: 'eCommerce App',
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
-
-          // This is the theme of your application.
-          //
-          // TRY THIS: Try running your application with "flutter run". You'll see
-          // the application has a purple toolbar. Then, without quitting the app,
-          // try changing the seedColor in the colorScheme below to Colors.green
-          // and then invoke "hot reload" (save your changes or press the "hot
-          // reload" button in a Flutter-supported IDE, or press "r" if you used
-          // the command line to start the app).
-          //
-          // Notice that the counter didn't reset back to zero; the application
-          // state is not lost during the reload. To reset the state, use hot
-          // restart instead.
-          //
-          // This works for code too, not just values: Most code changes can be
-          // tested with just a hot reload.
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
         ),
+        home: const SplashTransition(),
         routes: {
-          "/":(context)=> CheckUser(),
-          "/login": (context)=> LoginPage(),
-          "/home": (context)=> HomeNav(),
-          "/signup": (context)=> SignupPage(),
-          "/update_profile":(context)=> UpdateProfile(),
-          "/discount": (context)=> DiscountPage(),
-          "/specific": (context)=> SpecificProducts(),
-          "/view_product":(context)=> ViewProduct(),
-          "/cart": (context)=> CartPage(),
-          "/checkout":(context)=> CheckoutPage(),
-          "/orders":(context)=> OrdersPage(),
-          "/view_order":(context)=> ViewOrder(),
+          "/login": (context) => const LoginPage(),
+          "/home": (context) => const HomeNav(),
+          "/signup": (context) => const SignupPage(),
+          "/update_profile": (context) => const UpdateProfile(),
+          "/discount": (context) => const DiscountPage(),
+          "/specific": (context) => const SpecificProducts(),
+          "/view_product": (context) => const ViewProduct(),
+          "/cart": (context) => const CartPage(),
+          "/checkout": (context) => const CheckoutPage(),
+          "/orders": (context) => const OrdersPage(),
         },
-
       ),
     );
   }
 }
 
+/// 🩵 Animated Splash → Automatically goes to CheckUser
+class SplashTransition extends StatefulWidget {
+  const SplashTransition({super.key});
 
+  @override
+  State<SplashTransition> createState() => _SplashTransitionState();
+}
+
+class _SplashTransitionState extends State<SplashTransition>
+    with TickerProviderStateMixin {
+  late AnimationController _fadeController;
+  late AnimationController _scaleController;
+  late AnimationController _spinnerController;
+  late Animation<double> _bounceAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 1200),
+      vsync: this,
+    );
+    _spinnerController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    _bounceAnimation =
+        CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut);
+
+    _fadeController.forward();
+    _scaleController.forward();
+    _spinnerController.forward();
+
+    // Spinner fades out before navigation
+    Future.delayed(const Duration(milliseconds: 1600), () {
+      _spinnerController.reverse();
+    });
+
+    // Navigate to CheckUser after 2.5 seconds
+    Future.delayed(const Duration(milliseconds: 2500), () {
+      Navigator.pushReplacement(
+        context,
+        PageRouteBuilder(
+          pageBuilder: (_, __, ___) => const CheckUser(),
+          transitionsBuilder: (_, animation, __, child) =>
+              FadeTransition(opacity: animation, child: child),
+          transitionDuration: const Duration(milliseconds: 700),
+        ),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _scaleController.dispose();
+    _spinnerController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDarkMode =
+        MediaQuery.of(context).platformBrightness == Brightness.dark;
+    final size = MediaQuery.of(context).size;
+    final double logoSize = size.width * 0.35;
+
+    return FadeTransition(
+      opacity: _fadeController,
+      child: Container(
+        color: isDarkMode
+            ? const Color(0xFF0A192F)
+            : const Color(0xFF2196F3),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            ScaleTransition(
+              scale: _bounceAnimation,
+              child: Image.asset(
+                isDarkMode
+                    ? 'assets/images/logo_dark.png'
+                    : 'assets/images/logo.png',
+                width: logoSize.clamp(100, 180),
+                height: logoSize.clamp(100, 180),
+              ),
+            ),
+            const SizedBox(height: 30),
+            FadeTransition(
+              opacity: _spinnerController,
+              child: SizedBox(
+                width: 30,
+                height: 30,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isDarkMode ? Colors.lightBlueAccent : Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// ✅ Checks if user is logged in, then navigates accordingly
 class CheckUser extends StatefulWidget {
   const CheckUser({super.key});
 
@@ -105,21 +199,27 @@ class CheckUser extends StatefulWidget {
 }
 
 class _CheckUserState extends State<CheckUser> {
-
   @override
   void initState() {
-    AuthService().isLoggedIn().then((value) {
-      if (value) {
+    super.initState();
+    _checkLoginStatus();
+  }
+
+  Future<void> _checkLoginStatus() async {
+    final isLoggedIn = await AuthService().isLoggedIn();
+    if (mounted) {
+      if (isLoggedIn) {
         Navigator.pushReplacementNamed(context, "/home");
       } else {
         Navigator.pushReplacementNamed(context, "/login");
       }
-    });
-    super.initState();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(body:  Center(child: CircularProgressIndicator(),),);
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
   }
 }

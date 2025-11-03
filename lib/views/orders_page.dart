@@ -1,7 +1,7 @@
 import 'package:ecommerce_app/containers/additional_confirm.dart';
 import 'package:ecommerce_app/controllers/db_service.dart';
 import 'package:ecommerce_app/models/orders_model.dart';
-import 'package:ecommerce_app/utils/date_formatter.dart'; // ✅ import this
+import 'package:ecommerce_app/utils/date_formatter.dart';
 import 'package:flutter/material.dart';
 
 class OrdersPage extends StatefulWidget {
@@ -12,6 +12,21 @@ class OrdersPage extends StatefulWidget {
 }
 
 class _OrdersPageState extends State<OrdersPage> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = "";
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reset search when coming back to this page
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _searchController.clear();
+      setState(() {
+        _searchQuery = "";
+      });
+    });
+  }
+
   int totalQuantityCalculator(List<OrderProductModel> products) {
     int qty = 0;
     for (var e in products) {
@@ -67,9 +82,25 @@ class _OrdersPageState extends State<OrdersPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          "Orders",
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+        title: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: "Search orders (ID, date, status)...",
+            hintStyle: const TextStyle(color: Colors.grey),
+            prefixIcon: const Icon(Icons.search),
+            filled: true,
+            fillColor: Colors.grey.shade200,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(25),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          onChanged: (value) {
+            setState(() {
+              _searchQuery = value.trim().toLowerCase();
+            });
+          },
         ),
         scrolledUnderElevation: 0,
         forceMaterialTransparency: true,
@@ -80,30 +111,42 @@ class _OrdersPageState extends State<OrdersPage> {
           if (snapshot.hasData) {
             List<OrdersModel> orders =
             OrdersModel.fromJsonList(snapshot.data!.docs);
-            if (orders.isEmpty) {
-              return const Center(child: Text("No orders found"));
-            } else {
-              return ListView.builder(
-                itemCount: orders.length,
-                itemBuilder: (context, index) {
-                  final order = orders[index];
-                  return ListTile(
-                    onTap: () => Navigator.pushNamed(
-                      context,
-                      "/view_order",
-                      arguments: order,
-                    ),
-                    title: Text(
-                      "${totalQuantityCalculator(order.products)} Items Worth KSh ${order.total}",
-                    ),
-                    subtitle: Text(
-                      "Ordered on ${formatSmartDate(order.created_at)}", // ✅ using our formatter
-                    ),
-                    trailing: statusIcon(order.status),
-                  );
-                },
-              );
+
+            final filteredOrders = orders.where((order) {
+              final matchId = order.id.toLowerCase().contains(_searchQuery);
+              final matchStatus = order.status.toLowerCase().contains(_searchQuery);
+              final matchDate = formatSmartDate(order.created_at)
+                  .toLowerCase()
+                  .contains(_searchQuery);
+              return _searchQuery.isEmpty || matchId || matchStatus || matchDate;
+            }).toList();
+
+            if (filteredOrders.isEmpty) {
+              return const Center(child: Text("No matching orders found"));
             }
+
+            return ListView.builder(
+              itemCount: filteredOrders.length,
+              itemBuilder: (context, index) {
+                final order = filteredOrders[index];
+                return ListTile(
+                  onTap: () => Navigator.pushNamed(
+                    context,
+                    "/view_order",
+                    arguments: order,
+                  ),
+                  title: Text(
+                    "${totalQuantityCalculator(order.products)} Items Worth KSh ${order.total}",
+                  ),
+                  subtitle: Text(
+                    "Ordered on ${formatSmartDate(order.created_at)}",
+                  ),
+                  trailing: statusIcon(order.status),
+                );
+              },
+            );
+          } else if (snapshot.hasError) {
+            return const Center(child: Text("Error loading orders"));
           } else {
             return const Center(child: CircularProgressIndicator());
           }
@@ -113,6 +156,8 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 }
 
+
+// ✅ View Order remains unchanged
 class ViewOrder extends StatelessWidget {
   const ViewOrder({super.key});
 

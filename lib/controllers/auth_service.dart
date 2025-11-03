@@ -16,12 +16,30 @@ class AuthService {
   // Login
   Future<String> loginWithEmail(String email, String password) async {
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
+      await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email, password: password);
       return "Login Successful";
     } on FirebaseAuthException catch (e) {
-      return e.message.toString();
+      // Map Firebase error codes and messages to friendly UI messages
+      if (e.code == "wrong-password" ||
+          e.message?.contains("incorrect") == true ||
+          e.message?.contains("malformed") == true ||
+          e.message?.contains("expired") == true) {
+        return "Incorrect email or password.";
+      } else if (e.code == "user-not-found") {
+        return "No account found with this email.";
+      } else if (e.code == "network-request-failed") {
+        return "Network error. Check your connection.";
+      } else if (e.code == "internal-error") {
+        return "Internal error occurred. Try again later.";
+      } else {
+        return "Login failed. Please try again.";
+      }
+    } catch (e) {
+      return "Unexpected error. Check your internet connection.";
     }
   }
+
 
   // Logout
   Future logout() async {

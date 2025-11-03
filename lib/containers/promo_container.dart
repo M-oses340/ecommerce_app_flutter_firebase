@@ -16,7 +16,7 @@ class _PromoContainerState extends State<PromoContainer> {
   Widget build(BuildContext context) {
     return StreamBuilder(stream: DbService().readPromos(), builder:(context, snapshot) {
       if(snapshot.hasData){
-        List<PromoBannersModel> promos= PromoBannersModel.fromJsonList(snapshot.data!.docs) as List<PromoBannersModel>;
+        List<PromoBannersModel> promos= PromoBannersModel.fromJsonList(snapshot.data!.docs);
         if(promos.isEmpty){
           return SizedBox();
         }

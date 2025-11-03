@@ -4,6 +4,7 @@ import 'package:ecommerce_app/views/cart_page.dart';
 import 'package:ecommerce_app/views/home.dart';
 import 'package:ecommerce_app/views/orders_page.dart';
 import 'package:ecommerce_app/views/profile.dart';
+import 'package:ecommerce_app/views/categories_page.dart'; // ✅ Add this import
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -15,61 +16,108 @@ class HomeNav extends StatefulWidget {
 }
 
 class _HomeNavState extends State<HomeNav> {
-
-  @override
-  void initState() {
-    Provider.of<UserProvider>(context,listen: false);
-    super.initState();
-  }
-
   int selectedIndex = 0;
 
-  List pages = [
-    HomePage(),
-    OrdersPage(),
-    CartPage(),
-    ProfilePage()
-  ];
+  // ✅ Now includes 5 pages: Home, Categories, Orders, Cart, Profile
+  final List<Widget?> _pages = [const HomePage(), null, null, null, null];
+
+  Widget _getPage(int index) {
+    if (_pages[index] == null) {
+      switch (index) {
+        case 1:
+          _pages[index] = const CategoriesPage(); // ✅ Added
+          break;
+        case 2:
+          _pages[index] = const OrdersPage();
+          break;
+        case 3:
+          _pages[index] = const CartPage();
+          break;
+        case 4:
+          _pages[index] = const ProfilePage();
+          break;
+      }
+    }
+    return _pages[index]!;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: pages[selectedIndex],
+      body: IndexedStack(
+        index: selectedIndex,
+        children: List.generate(5, (index) => _getPage(index)),
+      ),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: Colors.white,
+        elevation: 8,
         currentIndex: selectedIndex,
-        onTap: (value) {
-          setState(() {
-            selectedIndex=value;
-          });
-        },
-        selectedItemColor:  Colors.blue,
+        onTap: (value) => setState(() => selectedIndex = value),
+        selectedItemColor: Colors.blue,
         unselectedItemColor: Colors.grey.shade400,
         showSelectedLabels: true,
         showUnselectedLabels: true,
-        items: <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home_outlined),
             label: 'Home',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_outlined),
+            label: 'Categories',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.local_shipping_outlined),
             label: 'Orders',
           ),
           BottomNavigationBarItem(
             icon: Consumer<CartProvider>(
               builder: (context, value, child) {
-                if(value.carts.length>0){
-                  return Badge(label: Text(value.carts.length.toString()),
-                    child: Icon(Icons.shopping_cart_outlined),
-                    backgroundColor:  Colors.green.shade400,
+                if (value.carts.isNotEmpty) {
+                  return Badge(
+                    label: Text(value.carts.length.toString()),
+                    backgroundColor: Colors.green.shade400,
+                    child: const Icon(Icons.shopping_cart_outlined),
                   );
                 }
-                return Icon(Icons.shopping_cart_outlined);
+                return const Icon(Icons.shopping_cart_outlined);
               },
             ),
             label: 'Cart',
           ),
+
+          // ✅ Profile with animated green tick if logged in
           BottomNavigationBarItem(
-            icon: Icon(Icons.account_circle_outlined),
+            icon: Consumer<UserProvider>(
+              builder: (context, user, child) {
+                final isLoggedIn = user.isLoggedIn;
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    const Icon(Icons.account_circle_outlined),
+                    Positioned(
+                      right: -2,
+                      top: -2,
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 400),
+                        transitionBuilder: (child, animation) =>
+                            ScaleTransition(scale: animation, child: child),
+                        child: isLoggedIn
+                            ? const Icon(
+                          Icons.check_circle,
+                          color: Colors.green,
+                          size: 16,
+                          key: ValueKey('tick'),
+                        )
+                            : const SizedBox(key: ValueKey('empty')),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
             label: 'Profile',
           ),
         ],
@@ -77,7 +125,3 @@ class _HomeNavState extends State<HomeNav> {
     );
   }
 }
-
-/*
-This is the home navbar of the app
- */

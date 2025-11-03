@@ -37,6 +37,10 @@ class CartProvider extends ChangeNotifier {
 
       if (carts.isNotEmpty) {
         readCartProducts(cartUids);
+      } else {
+        products.clear();
+        totalCost = 0;
+        totalQuantity = 0;
       }
 
       isLoading = false;
@@ -48,7 +52,8 @@ class CartProvider extends ChangeNotifier {
     _productSubscription?.cancel();
 
     _productSubscription = DbService().searchProducts(uids).listen((snapshot) {
-      List<ProductsModel> productsData = ProductsModel.fromJsonList(snapshot.docs);
+      List<ProductsModel> productsData =
+      ProductsModel.fromJsonList(snapshot.docs);
       products = productsData;
 
       addCost(products, carts);
@@ -83,6 +88,20 @@ class CartProvider extends ChangeNotifier {
 
   Future<void> refreshCart() async {
     readCartData();
+  }
+
+  /// ✅ NEW METHOD: Clear entire cart both locally & in Firestore
+  Future<void> clearCart() async {
+    try {
+      await DbService().emptyCart(); // clears Firestore
+      carts.clear();
+      products.clear();
+      totalCost = 0;
+      totalQuantity = 0;
+      notifyListeners();
+    } catch (e) {
+      debugPrint("Error clearing cart: $e");
+    }
   }
 
   void cancelProvider() {

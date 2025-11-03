@@ -14,7 +14,7 @@ class _DiscountContainerState extends State<DiscountContainer> {
   Widget build(BuildContext context) {
     return StreamBuilder(stream: DbService().readDiscounts(), builder: (context,snapshot){
       if(snapshot.hasData){
-        List<CouponModel> discounts= CouponModel.fromJsonList(snapshot.data!.docs) as List<CouponModel>;
+        List<CouponModel> discounts= CouponModel.fromJsonList(snapshot.data!.docs);
 
         if(discounts.isEmpty){
           return SizedBox();
