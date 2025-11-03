@@ -40,7 +40,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
   late AnimationController _passwordControllerAnim;
   late AnimationController _addressControllerAnim;
   late AnimationController _phoneControllerAnim;
-  late Animation<double> _shakeAnimation;
 
   // Fade-in opacity controls
   double _nameOpacity = 0.0;
@@ -64,39 +63,23 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
   }
 
   void _initAnimations() {
-    // Avatar bounce
-    _avatarController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    );
+    _avatarController = AnimationController(vsync: this, duration: const Duration(milliseconds: 700));
     _avatarScale = Tween<double>(begin: 0.8, end: 1.0).animate(
       CurvedAnimation(parent: _avatarController, curve: Curves.easeOutBack),
     );
     _avatarController.forward();
 
-    // Loading shimmer pulse
-    _loadingController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
+    _loadingController = AnimationController(vsync: this, duration: const Duration(seconds: 2))
+      ..repeat(reverse: true);
     _pulseAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
       CurvedAnimation(parent: _loadingController, curve: Curves.easeInOut),
     );
 
-    // Shake animations
     _nameControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _emailControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _passwordControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _addressControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
     _phoneControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
-
-    _shakeAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween(begin: 0, end: -8), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 8, end: -8), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 1),
-      TweenSequenceItem(tween: Tween(begin: 8, end: 0), weight: 1),
-    ]).animate(CurvedAnimation(parent: _nameControllerAnim, curve: Curves.elasticIn));
   }
 
   void _startFadeSequence() {
@@ -126,7 +109,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
     super.dispose();
   }
 
-  // 🔥 Add this missing method
   void _triggerShake(String field) {
     switch (field) {
       case 'name':
@@ -156,7 +138,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
 
   Future<void> _updateProfile() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
-
     debugPrint("🔹 [UpdateProfile] Update button pressed");
 
     if (!formKey.currentState!.validate()) {
@@ -174,38 +155,30 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
     debugPrint("🟡 [UpdateProfile] Loading state ON");
 
     try {
-      // 🔥 Email change requires re-authentication
+      // Email change with password check
       if (_currentPasswordController.text.isNotEmpty) {
         debugPrint("🔹 [UpdateProfile] Email is being changed...");
         final res = await AuthService().updateEmail(
           newEmail: _emailController.text.trim(),
           currentPassword: _currentPasswordController.text.trim(),
         );
-
         debugPrint("🔸 [UpdateProfile] updateEmail() result: $res");
 
         if (res == "wrong-password") {
-          debugPrint("❌ [UpdateProfile] Wrong password detected");
           _triggerShake('password');
-          _currentPasswordController.clear();
           throw "Incorrect current password.";
         } else if (res == "email-already-in-use") {
           throw "This email is already in use.";
-        } else if (res == "requires-recent-login") {
-          throw "Please log in again to perform this action.";
         } else if (res != "success") {
           throw "Failed to update Profile ($res)";
         }
-
         userProvider.updateUserData({"email": _emailController.text.trim()});
       }
 
-      // 🔹 Upload image if changed
       String? profileImageUrl;
       if (_selectedImage != null) {
         debugPrint("🟦 [UpdateProfile] Uploading new profile image...");
         profileImageUrl = await DbService().uploadProfileImage(_selectedImage!);
-        debugPrint("✅ [UpdateProfile] Image uploaded: $profileImageUrl");
       }
 
       final data = {
@@ -233,6 +206,17 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
     } finally {
       if (mounted) setState(() => _loading = false);
       debugPrint("⚪ [UpdateProfile] Loading state OFF");
+    }
+  }
+
+  Future<bool> _assetExists(String path) async {
+    try {
+      final assetBundle = DefaultAssetBundle.of(context);
+      final data = await assetBundle.load(path);
+      return data.lengthInBytes > 0; // ✅ Correct way to check if asset exists
+    } catch (_) {
+      debugPrint("⚠️ Asset missing: $path");
+      return false;
     }
   }
 
@@ -296,14 +280,34 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       child: Center(
                         child: Stack(
                           children: [
-                            CircleAvatar(
-                              radius: 55,
-                              backgroundImage: _selectedImage != null
-                                  ? FileImage(_selectedImage!)
-                                  : (user.profileImage.isNotEmpty
-                                  ? NetworkImage(user.profileImage)
-                                  : const AssetImage('assets/images/default_avatar.png'))
-                              as ImageProvider,
+                            FutureBuilder<bool>(
+                              future: _assetExists('assets/images/default_avatar.png'),
+                              builder: (context, snapshot) {
+                                ImageProvider imageProvider;
+
+                                if (_selectedImage != null) {
+                                  imageProvider = FileImage(_selectedImage!);
+                                } else if (user.profileImage.isNotEmpty) {
+                                  imageProvider = NetworkImage(user.profileImage);
+                                } else if (snapshot.connectionState == ConnectionState.done &&
+                                    snapshot.data == true) {
+                                  imageProvider = const AssetImage('assets/images/default_avatar.png');
+                                } else {
+                                  // Network fallback avatar
+                                  imageProvider = const NetworkImage(
+                                    'https://ui-avatars.com/api/?background=0D8ABC&color=fff&name=User',
+                                  );
+                                }
+
+                                return CircleAvatar(
+                                  radius: 55,
+                                  backgroundColor: Colors.grey[300],
+                                  backgroundImage: imageProvider,
+                                  onBackgroundImageError: (_, __) {
+                                    debugPrint("⚠️ Failed to load profile image.");
+                                  },
+                                );
+                              },
                             ),
                             Positioned(
                               bottom: 0,
@@ -322,7 +326,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 30),
-
                     _animatedField(
                       opacity: _nameOpacity,
                       child: _shakeWrapper(
@@ -335,7 +338,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 15),
-
                     _animatedField(
                       opacity: _emailOpacity,
                       child: _shakeWrapper(
@@ -348,7 +350,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 15),
-
                     _animatedField(
                       opacity: _passwordOpacity,
                       child: _shakeWrapper(
@@ -363,7 +364,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 15),
-
                     _animatedField(
                       opacity: _addressOpacity,
                       child: _shakeWrapper(
@@ -377,7 +377,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 15),
-
                     _animatedField(
                       opacity: _phoneOpacity,
                       child: _shakeWrapper(
@@ -390,7 +389,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
                       ),
                     ),
                     const SizedBox(height: 25),
-
                     AnimatedOpacity(
                       opacity: _buttonOpacity,
                       duration: const Duration(milliseconds: 700),
@@ -413,7 +411,6 @@ class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateM
               ),
             ),
           ),
-
           if (_loading)
             AnimatedBuilder(
               animation: _pulseAnimation,
