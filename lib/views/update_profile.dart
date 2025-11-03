@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 import 'package:ecommerce_app/controllers/auth_service.dart';
 import 'package:ecommerce_app/controllers/db_service.dart';
 import 'package:ecommerce_app/providers/user_provider.dart';
@@ -13,7 +14,7 @@ class UpdateProfile extends StatefulWidget {
   State<UpdateProfile> createState() => _UpdateProfileState();
 }
 
-class _UpdateProfileState extends State<UpdateProfile> {
+class _UpdateProfileState extends State<UpdateProfile> with TickerProviderStateMixin {
   final formKey = GlobalKey<FormState>();
 
   late TextEditingController _nameController;
@@ -25,6 +26,30 @@ class _UpdateProfileState extends State<UpdateProfile> {
   bool _loading = false;
   File? _selectedImage;
 
+  // Avatar animation
+  late AnimationController _avatarController;
+  late Animation<double> _avatarScale;
+
+  // Loading shimmer pulse
+  late AnimationController _loadingController;
+  late Animation<double> _pulseAnimation;
+
+  // Shake animations
+  late AnimationController _nameControllerAnim;
+  late AnimationController _emailControllerAnim;
+  late AnimationController _passwordControllerAnim;
+  late AnimationController _addressControllerAnim;
+  late AnimationController _phoneControllerAnim;
+  late Animation<double> _shakeAnimation;
+
+  // Fade-in opacity controls
+  double _nameOpacity = 0.0;
+  double _emailOpacity = 0.0;
+  double _passwordOpacity = 0.0;
+  double _addressOpacity = 0.0;
+  double _phoneOpacity = 0.0;
+  double _buttonOpacity = 0.0;
+
   @override
   void initState() {
     super.initState();
@@ -33,10 +58,66 @@ class _UpdateProfileState extends State<UpdateProfile> {
     _emailController = TextEditingController(text: user.email);
     _addressController = TextEditingController(text: user.address);
     _phoneController = TextEditingController(text: user.phone);
+
+    _initAnimations();
+    _startFadeSequence();
+  }
+
+  void _initAnimations() {
+    // Avatar bounce
+    _avatarController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _avatarScale = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _avatarController, curve: Curves.easeOutBack),
+    );
+    _avatarController.forward();
+
+    // Loading shimmer pulse
+    _loadingController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+    _pulseAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+      CurvedAnimation(parent: _loadingController, curve: Curves.easeInOut),
+    );
+
+    // Shake animations
+    _nameControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _emailControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _passwordControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _addressControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+    _phoneControllerAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
+
+    _shakeAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween(begin: 0, end: -8), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 8, end: -8), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 1),
+      TweenSequenceItem(tween: Tween(begin: 8, end: 0), weight: 1),
+    ]).animate(CurvedAnimation(parent: _nameControllerAnim, curve: Curves.elasticIn));
+  }
+
+  void _startFadeSequence() {
+    const delayStep = 400;
+    Future.delayed(const Duration(milliseconds: 200), () => setState(() => _nameOpacity = 1.0));
+    Future.delayed(Duration(milliseconds: 200 + delayStep), () => setState(() => _emailOpacity = 1.0));
+    Future.delayed(Duration(milliseconds: 200 + 2 * delayStep), () => setState(() => _passwordOpacity = 1.0));
+    Future.delayed(Duration(milliseconds: 200 + 3 * delayStep), () => setState(() => _addressOpacity = 1.0));
+    Future.delayed(Duration(milliseconds: 200 + 4 * delayStep), () => setState(() => _phoneOpacity = 1.0));
+    Future.delayed(Duration(milliseconds: 200 + 5 * delayStep), () => setState(() => _buttonOpacity = 1.0));
   }
 
   @override
   void dispose() {
+    _avatarController.dispose();
+    _loadingController.dispose();
+    _nameControllerAnim.dispose();
+    _emailControllerAnim.dispose();
+    _passwordControllerAnim.dispose();
+    _addressControllerAnim.dispose();
+    _phoneControllerAnim.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _addressController.dispose();
@@ -45,190 +126,332 @@ class _UpdateProfileState extends State<UpdateProfile> {
     super.dispose();
   }
 
-  Future<void> _pickImage() async {
-    final picker = ImagePicker();
-    final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
-    if (picked != null) {
-      setState(() => _selectedImage = File(picked.path));
+  // 🔥 Add this missing method
+  void _triggerShake(String field) {
+    switch (field) {
+      case 'name':
+        _nameControllerAnim.forward(from: 0);
+        break;
+      case 'email':
+        _emailControllerAnim.forward(from: 0);
+        break;
+      case 'password':
+        _passwordControllerAnim.forward(from: 0);
+        break;
+      case 'address':
+        _addressControllerAnim.forward(from: 0);
+        break;
+      case 'phone':
+        _phoneControllerAnim.forward(from: 0);
+        break;
     }
   }
 
-  Future<void> _updateProfile() async {
-    if (!formKey.currentState!.validate()) return;
+  Future<void> _pickImage() async {
+    if (_loading) return;
+    final picker = ImagePicker();
+    final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
+    if (picked != null) setState(() => _selectedImage = File(picked.path));
+  }
 
-    setState(() => _loading = true);
+  Future<void> _updateProfile() async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    try {
-      // 1️⃣ Update email if changed
-      if (_emailController.text != userProvider.email) {
-        if (_currentPasswordController.text.isEmpty) {
-          throw "Please enter current password to change email.";
-        }
+    debugPrint("🔹 [UpdateProfile] Update button pressed");
 
+    if (!formKey.currentState!.validate()) {
+      debugPrint("❌ [UpdateProfile] Validation failed");
+      if (_nameController.text.isEmpty) _triggerShake('name');
+      if (_emailController.text.isEmpty) _triggerShake('email');
+      if (_currentPasswordController.text.isEmpty &&
+          _emailController.text != userProvider.email) _triggerShake('password');
+      if (_addressController.text.isEmpty) _triggerShake('address');
+      if (_phoneController.text.isEmpty) _triggerShake('phone');
+      return;
+    }
+
+    setState(() => _loading = true);
+    debugPrint("🟡 [UpdateProfile] Loading state ON");
+
+    try {
+      // 🔥 Email change requires re-authentication
+      if (_currentPasswordController.text.isNotEmpty) {
+        debugPrint("🔹 [UpdateProfile] Email is being changed...");
         final res = await AuthService().updateEmail(
-          newEmail: _emailController.text,
-          currentPassword: _currentPasswordController.text,
+          newEmail: _emailController.text.trim(),
+          currentPassword: _currentPasswordController.text.trim(),
         );
 
-        if (!res.contains("successfully")) throw res;
+        debugPrint("🔸 [UpdateProfile] updateEmail() result: $res");
 
-        // Update provider email immediately
-        userProvider.updateUserData({"email": _emailController.text});
+        if (res == "wrong-password") {
+          debugPrint("❌ [UpdateProfile] Wrong password detected");
+          _triggerShake('password');
+          _currentPasswordController.clear();
+          throw "Incorrect current password.";
+        } else if (res == "email-already-in-use") {
+          throw "This email is already in use.";
+        } else if (res == "requires-recent-login") {
+          throw "Please log in again to perform this action.";
+        } else if (res != "success") {
+          throw "Failed to update Profile ($res)";
+        }
+
+        userProvider.updateUserData({"email": _emailController.text.trim()});
       }
 
-      // 2️⃣ Upload profile image if selected
+      // 🔹 Upload image if changed
       String? profileImageUrl;
       if (_selectedImage != null) {
+        debugPrint("🟦 [UpdateProfile] Uploading new profile image...");
         profileImageUrl = await DbService().uploadProfileImage(_selectedImage!);
+        debugPrint("✅ [UpdateProfile] Image uploaded: $profileImageUrl");
       }
 
-      // 3️⃣ Update user fields in Firestore
       final data = {
         "name": _nameController.text,
         "phone": _phoneController.text,
         "address": _addressController.text,
         if (profileImageUrl != null) "profileImage": profileImageUrl,
       };
+
+      debugPrint("🟢 [UpdateProfile] Updating Firestore data: $data");
       await DbService().updateUserData(extraData: data);
+      userProvider.updateUserData(data);
 
-      // 4️⃣ Update provider immediately to reflect changes in UI
-      userProvider.updateUserData({
-        "name": _nameController.text,
-        "address": _addressController.text,
-        "phone": _phoneController.text,
-        if (profileImageUrl != null) "profileImage": profileImageUrl,
-      });
-
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text("Profile updated successfully")),
       );
+      debugPrint("✅ [UpdateProfile] Profile updated successfully");
     } catch (e) {
+      debugPrint("❌ [UpdateProfile] Exception: $e");
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("$e")),
+        SnackBar(content: Text(e.toString())),
       );
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
+      debugPrint("⚪ [UpdateProfile] Loading state OFF");
     }
+  }
+
+
+  Widget _shakeWrapper(AnimationController controller, Widget child) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final offset = TweenSequence<double>([
+          TweenSequenceItem(tween: Tween(begin: 0, end: -8), weight: 1),
+          TweenSequenceItem(tween: Tween(begin: -8, end: 8), weight: 1),
+          TweenSequenceItem(tween: Tween(begin: 8, end: 0), weight: 1),
+        ]).animate(controller);
+        return Transform.translate(offset: Offset(offset.value, 0), child: child);
+      },
+    );
+  }
+
+  Widget _animatedField({required double opacity, required Widget child}) {
+    return AnimatedOpacity(
+      opacity: opacity,
+      duration: const Duration(milliseconds: 700),
+      curve: Curves.easeInOut,
+      child: child,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final user = Provider.of<UserProvider>(context);
+    final width = MediaQuery.of(context).size.width;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    final inputDecoration = InputDecoration(
+      border: const OutlineInputBorder(),
+      filled: true,
+      fillColor: isDark ? Colors.grey[850] : Colors.white,
+      labelStyle: TextStyle(color: theme.colorScheme.onSurface),
+    );
+
     return Scaffold(
       appBar: AppBar(
         title: const Text("Update Profile"),
-        scrolledUnderElevation: 0,
-        forceMaterialTransparency: true,
+        backgroundColor: theme.colorScheme.primaryContainer,
       ),
-      body: SingleChildScrollView(
-        child: Form(
-          key: formKey,
-          child: Padding(
-            padding: const EdgeInsets.all(12.0),
-            child: Column(
-              children: [
-                // 🖼️ Profile Image Preview
-                Center(
-                  child: Stack(
-                    children: [
-                      CircleAvatar(
-                        radius: 50,
-                        backgroundImage: _selectedImage != null
-                            ? FileImage(_selectedImage!)
-                            : (user.profileImage.isNotEmpty
-                            ? NetworkImage(user.profileImage)
-                            : const AssetImage('assets/images/default_avatar.png')) as ImageProvider,
+      backgroundColor: theme.colorScheme.background,
+      body: Stack(
+        children: [
+          AbsorbPointer(
+            absorbing: _loading,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(12),
+              physics: const BouncingScrollPhysics(),
+              child: Form(
+                key: formKey,
+                child: Column(
+                  children: [
+                    ScaleTransition(
+                      scale: _avatarScale,
+                      child: Center(
+                        child: Stack(
+                          children: [
+                            CircleAvatar(
+                              radius: 55,
+                              backgroundImage: _selectedImage != null
+                                  ? FileImage(_selectedImage!)
+                                  : (user.profileImage.isNotEmpty
+                                  ? NetworkImage(user.profileImage)
+                                  : const AssetImage('assets/images/default_avatar.png'))
+                              as ImageProvider,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: _loading ? null : _pickImage,
+                                child: CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: theme.colorScheme.primary,
+                                  child: const Icon(Icons.edit, size: 18, color: Colors.white),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      Positioned(
-                        bottom: 0,
-                        right: 0,
-                        child: GestureDetector(
-                          onTap: _loading ? null : _pickImage,
-                          child: const CircleAvatar(
-                            radius: 16,
-                            backgroundColor: Colors.blue,
-                            child: Icon(Icons.edit, size: 16, color: Colors.white),
+                    ),
+                    const SizedBox(height: 30),
+
+                    _animatedField(
+                      opacity: _nameOpacity,
+                      child: _shakeWrapper(
+                        _nameControllerAnim,
+                        TextFormField(
+                          controller: _nameController,
+                          decoration: inputDecoration.copyWith(labelText: "Name"),
+                          validator: (v) => v!.isEmpty ? "Name cannot be empty" : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    _animatedField(
+                      opacity: _emailOpacity,
+                      child: _shakeWrapper(
+                        _emailControllerAnim,
+                        TextFormField(
+                          controller: _emailController,
+                          decoration: inputDecoration.copyWith(labelText: "Email"),
+                          validator: (v) => v!.isEmpty ? "Email cannot be empty" : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    _animatedField(
+                      opacity: _passwordOpacity,
+                      child: _shakeWrapper(
+                        _passwordControllerAnim,
+                        TextFormField(
+                          controller: _currentPasswordController,
+                          obscureText: true,
+                          decoration: inputDecoration.copyWith(
+                            labelText: "Current Password (required if changing email)",
                           ),
                         ),
                       ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-
-                // 🔹 Form Fields
-                TextFormField(
-                  controller: _nameController,
-                  enabled: !_loading,
-                  decoration: const InputDecoration(
-                    labelText: "Name",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value!.isEmpty ? "Name cannot be empty." : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _emailController,
-                  enabled: !_loading,
-                  decoration: const InputDecoration(
-                    labelText: "Email",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value!.isEmpty ? "Email cannot be empty." : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _currentPasswordController,
-                  enabled: !_loading,
-                  obscureText: true,
-                  decoration: const InputDecoration(
-                    labelText: "Current Password (required to change email)",
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _addressController,
-                  enabled: !_loading,
-                  maxLines: 3,
-                  decoration: const InputDecoration(
-                    labelText: "Address",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value!.isEmpty ? "Address cannot be empty." : null,
-                ),
-                const SizedBox(height: 10),
-                TextFormField(
-                  controller: _phoneController,
-                  enabled: !_loading,
-                  decoration: const InputDecoration(
-                    labelText: "Phone",
-                    border: OutlineInputBorder(),
-                  ),
-                  validator: (value) => value!.isEmpty ? "Phone cannot be empty." : null,
-                ),
-                const SizedBox(height: 20),
-
-                // ✅ Submit Button
-                SizedBox(
-                  height: 50,
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: _loading ? null : _updateProfile,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Theme.of(context).primaryColor,
-                      foregroundColor: Colors.white,
                     ),
-                    child: _loading
-                        ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text("Update Profile"),
-                  ),
+                    const SizedBox(height: 15),
+
+                    _animatedField(
+                      opacity: _addressOpacity,
+                      child: _shakeWrapper(
+                        _addressControllerAnim,
+                        TextFormField(
+                          controller: _addressController,
+                          maxLines: 3,
+                          decoration: inputDecoration.copyWith(labelText: "Address"),
+                          validator: (v) => v!.isEmpty ? "Address cannot be empty" : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 15),
+
+                    _animatedField(
+                      opacity: _phoneOpacity,
+                      child: _shakeWrapper(
+                        _phoneControllerAnim,
+                        TextFormField(
+                          controller: _phoneController,
+                          decoration: inputDecoration.copyWith(labelText: "Phone"),
+                          validator: (v) => v!.isEmpty ? "Phone cannot be empty" : null,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 25),
+
+                    AnimatedOpacity(
+                      opacity: _buttonOpacity,
+                      duration: const Duration(milliseconds: 700),
+                      curve: Curves.easeInOut,
+                      child: SizedBox(
+                        width: width,
+                        height: 50,
+                        child: ElevatedButton(
+                          onPressed: _loading ? null : _updateProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: theme.colorScheme.onPrimary,
+                          ),
+                          child: const Text("Update Profile"),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
-        ),
+
+          if (_loading)
+            AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Container(
+                  width: double.infinity,
+                  height: double.infinity,
+                  color: theme.colorScheme.surface.withOpacity(0.3),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                    child: Center(
+                      child: Opacity(
+                        opacity: _pulseAnimation.value,
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            CircularProgressIndicator(
+                              strokeWidth: 4,
+                              color: theme.colorScheme.primary.withOpacity(0.9),
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              "Updating Profile...",
+                              style: theme.textTheme.bodyLarge?.copyWith(
+                                color: theme.colorScheme.onSurface.withOpacity(0.8),
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 0.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
       ),
     );
   }

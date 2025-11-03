@@ -14,141 +14,302 @@ class OrdersPage extends StatefulWidget {
 class _OrdersPageState extends State<OrdersPage> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = "";
+  final GlobalKey<AnimatedListState> _listKey = GlobalKey<AnimatedListState>();
+  List<OrdersModel> _displayedOrders = [];
+
+  /// Tracks orders currently animating cancel button
+  Map<String, bool> _isCancelling = {};
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Reset search when coming back to this page
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _searchController.clear();
-      setState(() {
-        _searchQuery = "";
-      });
+      setState(() => _searchQuery = "");
     });
   }
 
   int totalQuantityCalculator(List<OrderProductModel> products) {
-    int qty = 0;
-    for (var e in products) {
-      qty += e.quantity;
-    }
-    return qty;
+    return products.fold(0, (sum, e) => sum + e.quantity);
   }
 
-  Widget statusIcon(String status) {
-    if (status == "PAID") {
-      return statusContainer(
-        text: "PAID",
-        bgColor: Colors.lightGreen,
-        textColor: Colors.white,
-      );
-    } else if (status == "ON_THE_WAY") {
-      return statusContainer(
-        text: "ON THE WAY",
-        bgColor: Colors.yellow,
-        textColor: Colors.black,
-      );
-    } else if (status == "DELIVERED") {
-      return statusContainer(
-        text: "DELIVERED",
-        bgColor: Colors.green.shade700,
-        textColor: Colors.white,
-      );
-    } else {
-      return statusContainer(
-        text: "CANCELLED",
-        bgColor: Colors.red,
-        textColor: Colors.white,
-      );
-    }
+  /// 🔥 Cancel order — updates UI and Firestore immediately with undo
+  void _cancelOrder(int index, OrdersModel order) async {
+    final oldStatus = order.status;
+
+    // Trigger cancel animation on button
+    setState(() {
+      _isCancelling[order.id] = true;
+    });
+
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    // Update status immediately
+    setState(() {
+      order.status = "CANCELLED";
+      _isCancelling[order.id] = false;
+    });
+
+    // Firestore update
+    await DbService().updateOrderStatus(
+      docId: order.id,
+      data: {"status": "CANCELLED"},
+    );
+
+    // Snackbar with Undo
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text("Order cancelled"),
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: "Undo",
+          onPressed: () async {
+            setState(() {
+              order.status = oldStatus;
+            });
+            await DbService().updateOrderStatus(
+              docId: order.id,
+              data: {"status": oldStatus},
+            );
+          },
+        ),
+      ),
+    );
   }
 
-  Widget statusContainer({
-    required String text,
-    required Color bgColor,
-    required Color textColor,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(8),
-      color: bgColor,
-      child: Text(
-        text,
-        style: TextStyle(color: textColor),
+  Widget statusChip(String status) {
+    Color bgColor;
+    switch (status.toUpperCase()) {
+      case "PAID":
+        bgColor = Colors.green.shade600;
+        break;
+      case "ON_THE_WAY":
+        bgColor = Colors.orange.shade700;
+        break;
+      case "DELIVERED":
+        bgColor = Colors.teal.shade700;
+        break;
+      case "CANCELLED":
+        bgColor = Colors.red.shade700;
+        break;
+      default:
+        bgColor = Colors.grey.shade600;
+    }
+
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutBack,
+              ),
+            ),
+            child: child,
+          ),
+        );
+      },
+      child: Container(
+        key: ValueKey(status),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          status.replaceAll("_", " "),
+          style: const TextStyle(color: Colors.white, fontSize: 11),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOrderCard(BuildContext context, OrdersModel order, int index) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 400),
+      opacity: order.status == "CANCELLED" ? 0.5 : 1.0, // faded if cancelled
+      child: Card(
+        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        color: colorScheme.surface,
+        elevation: 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: ListTile(
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => ViewOrder(order: order)),
+          ),
+          title: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  "${totalQuantityCalculator(order.products)} items - KSh ${order.total}",
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              const SizedBox(width: 8),
+              statusChip(order.status),
+            ],
+          ),
+          subtitle: Text(
+            "Ordered on ${formatSmartDate(order.created_at)}",
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+
+          // Cancel button with animation
+          trailing: (order.status == "CANCELLED" || order.status == "DELIVERED")
+              ? null
+              : AnimatedSwitcher(
+            duration: const Duration(milliseconds: 300),
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(scale: animation, child: child),
+            ),
+            child: _isCancelling[order.id] == true
+                ? const SizedBox(
+              key: ValueKey("cancel_animating"),
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+                : PopupMenuButton<String>(
+              key: ValueKey("cancel_ready"),
+              icon: const Icon(Icons.more_vert),
+              onSelected: (value) {
+                if (value == 'cancel') {
+                  showDialog(
+                    context: context,
+                    builder: (context) => AdditionalConfirm(
+                      contentText:
+                      "Are you sure you want to cancel this order? You can undo within 5 seconds.",
+                      onYes: () {
+                        Navigator.pop(context);
+                        _cancelOrder(index, order);
+                      },
+                      onNo: () => Navigator.pop(context),
+                    ),
+                  );
+                }
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'cancel',
+                  child: Row(
+                    children: [
+                      Icon(Icons.cancel, color: Colors.red),
+                      SizedBox(width: 8),
+                      Text("Cancel Order"),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _searchController,
+          style: TextStyle(color: colorScheme.onSurface),
           decoration: InputDecoration(
             hintText: "Search orders (ID, date, status)...",
-            hintStyle: const TextStyle(color: Colors.grey),
-            prefixIcon: const Icon(Icons.search),
+            hintStyle:
+            TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
+            prefixIcon:
+            Icon(Icons.search, color: colorScheme.onSurfaceVariant),
             filled: true,
-            fillColor: Colors.grey.shade200,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+            fillColor: colorScheme.surfaceVariant.withOpacity(0.7),
+            contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(25),
               borderSide: BorderSide.none,
             ),
           ),
           onChanged: (value) {
-            setState(() {
-              _searchQuery = value.trim().toLowerCase();
-            });
+            setState(() => _searchQuery = value.trim().toLowerCase());
           },
         ),
         scrolledUnderElevation: 0,
-        forceMaterialTransparency: true,
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
       ),
       body: StreamBuilder(
         stream: DbService().readOrders(),
         builder: (context, snapshot) {
           if (snapshot.hasData) {
-            List<OrdersModel> orders =
-            OrdersModel.fromJsonList(snapshot.data!.docs);
-
-            final filteredOrders = orders.where((order) {
-              final matchId = order.id.toLowerCase().contains(_searchQuery);
-              final matchStatus = order.status.toLowerCase().contains(_searchQuery);
-              final matchDate = formatSmartDate(order.created_at)
-                  .toLowerCase()
-                  .contains(_searchQuery);
-              return _searchQuery.isEmpty || matchId || matchStatus || matchDate;
+            final orders = OrdersModel.fromJsonList(snapshot.data!.docs);
+            final filtered = orders.where((order) {
+              final q = _searchQuery;
+              return q.isEmpty ||
+                  order.id.toLowerCase().contains(q) ||
+                  order.status.toLowerCase().contains(q) ||
+                  formatSmartDate(order.created_at).toLowerCase().contains(q);
             }).toList();
 
-            if (filteredOrders.isEmpty) {
-              return const Center(child: Text("No matching orders found"));
+            _displayedOrders = filtered;
+
+            if (_displayedOrders.isEmpty) {
+              return Center(
+                child: Text(
+                  "No matching orders found",
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodyMedium
+                      ?.copyWith(color: colorScheme.onSurfaceVariant),
+                ),
+              );
             }
 
-            return ListView.builder(
-              itemCount: filteredOrders.length,
-              itemBuilder: (context, index) {
-                final order = filteredOrders[index];
-                return ListTile(
-                  onTap: () => Navigator.pushNamed(
-                    context,
-                    "/view_order",
-                    arguments: order,
+            return AnimatedList(
+              key: _listKey,
+              initialItemCount: _displayedOrders.length,
+              itemBuilder: (context, index, animation) {
+                final order = _displayedOrders[index];
+                return SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.1),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
                   ),
-                  title: Text(
-                    "${totalQuantityCalculator(order.products)} Items Worth KSh ${order.total}",
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: _buildOrderCard(context, order, index),
                   ),
-                  subtitle: Text(
-                    "Ordered on ${formatSmartDate(order.created_at)}",
-                  ),
-                  trailing: statusIcon(order.status),
                 );
               },
             );
           } else if (snapshot.hasError) {
             return const Center(child: Text("Error loading orders"));
           } else {
-            return const Center(child: CircularProgressIndicator());
+            return Center(
+              child: CircularProgressIndicator(color: colorScheme.primary),
+            );
           }
         },
       ),
@@ -156,178 +317,152 @@ class _OrdersPageState extends State<OrdersPage> {
   }
 }
 
-
-// ✅ View Order remains unchanged
+/// ✅ ViewOrder Widget (unchanged, with animated statusChip)
 class ViewOrder extends StatelessWidget {
-  const ViewOrder({super.key});
+  final OrdersModel order;
+
+  const ViewOrder({super.key, required this.order});
+
+  int totalQuantity() {
+    return order.products.fold(0, (sum, p) => sum + p.quantity);
+  }
 
   @override
   Widget build(BuildContext context) {
-    final args = ModalRoute.of(context)!.settings.arguments as OrdersModel;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text("Order Summary")),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+      appBar: AppBar(
+        title: const Text("Order Details"),
+        backgroundColor: colorScheme.surface,
+        foregroundColor: colorScheme.onSurface,
+        scrolledUnderElevation: 0,
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: ListView(
           children: [
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8),
-              child: Text(
-                "Delivery Details",
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-              ),
-            ),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(8),
-              color: Colors.grey.shade100,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text("Order Id: ${args.id}"),
-                  Text("Ordered on: ${formatSmartDate(args.created_at)}"),
-                  Text("Order by: ${args.name}"),
-                  Text("Phone no: ${args.phone}"),
-                  Text("Delivery Address: ${args.address}"),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: args.products.map((e) {
-                return Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  margin: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.shade200,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Row(
-                        children: [
-                          SizedBox(
-                            height: 50,
-                            width: 50,
-                            child: Image.network(e.image),
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(child: Text(e.name)),
-                        ],
-                      ),
-                      Text(
-                        "KSh ${e.single_price} x ${e.quantity} quantity",
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        "KSh ${e.total_price}",
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }).toList(),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(4.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "Discount: KSh ${args.discount}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 20),
-                  ),
-                  Text(
-                    "Total: KSh ${args.total}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 20),
-                  ),
-                  Text(
-                    "Status: ${args.status}",
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 20),
-                  ),
-                ],
-              ),
-            ),
+            Text("Order ID: ${order.id}",
+                style: theme.textTheme.bodyMedium
+                    ?.copyWith(color: colorScheme.onSurfaceVariant)),
             const SizedBox(height: 8),
-            if (args.status == "PAID" || args.status == "ON_THE_WAY")
-              SizedBox(
-                height: 60,
-                width: MediaQuery.of(context).size.width * .9,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
-                    foregroundColor: Colors.white,
-                  ),
-                  onPressed: () {
-                    showDialog(
-                      context: context,
-                      builder: (context) => ModifyOrder(order: args),
-                    );
-                  },
-                  child: const Text("Modify Order"),
-                ),
+            Text("Placed on ${formatSmartDate(order.created_at)}",
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: colorScheme.onSurfaceVariant)),
+            const SizedBox(height: 8),
+            statusChip(order.status),
+            const SizedBox(height: 20),
+            Divider(color: colorScheme.outlineVariant),
+            Text("Products (${totalQuantity()} items)",
+                style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onSurface)),
+            const SizedBox(height: 10),
+            ...order.products.map((p) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(p.image,
+                    width: 50, height: 50, fit: BoxFit.cover),
               ),
+              title: Text(p.name,
+                  style: theme.textTheme.bodyLarge
+                      ?.copyWith(color: colorScheme.onSurface)),
+              subtitle: Text("${p.quantity} × KSh ${p.single_price}",
+                  style: theme.textTheme.bodySmall
+                      ?.copyWith(color: colorScheme.onSurfaceVariant)),
+              trailing: Text("KSh ${p.total_price}",
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: colorScheme.onSurface)),
+            )),
+            const SizedBox(height: 20),
+            Divider(color: colorScheme.outlineVariant),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text("Delivery Address",
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              subtitle: Text(order.address),
+            ),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text("Customer",
+                  style: theme.textTheme.titleMedium
+                      ?.copyWith(fontWeight: FontWeight.bold)),
+              subtitle: Text("${order.name} (${order.phone})"),
+            ),
+            const SizedBox(height: 20),
+            Divider(color: colorScheme.outlineVariant),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Discount", style: theme.textTheme.bodyMedium),
+                Text("KSh ${order.discount}"),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Total",
+                    style: theme.textTheme.titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text("KSh ${order.total}",
+                    style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.primary)),
+              ],
+            ),
           ],
         ),
       ),
     );
   }
-}
 
-class ModifyOrder extends StatefulWidget {
-  final OrdersModel order;
-  const ModifyOrder({super.key, required this.order});
+  Widget statusChip(String status) {
+    Color bgColor;
+    switch (status.toUpperCase()) {
+      case "PAID":
+        bgColor = Colors.green.shade600;
+        break;
+      case "ON_THE_WAY":
+        bgColor = Colors.orange.shade700;
+        break;
+      case "DELIVERED":
+        bgColor = Colors.teal.shade700;
+        break;
+      case "CANCELLED":
+        bgColor = Colors.red.shade700;
+        break;
+      default:
+        bgColor = Colors.grey.shade600;
+    }
 
-  @override
-  State<ModifyOrder> createState() => _ModifyOrderState();
-}
-
-class _ModifyOrderState extends State<ModifyOrder> {
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text("Modify this order"),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text("Choose what you want to do"),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              showDialog(
-                context: context,
-                builder: (context) => AdditionalConfirm(
-                  contentText:
-                  "After canceling this cannot be changed — you’ll need to order again.",
-                  onYes: () async {
-                    await DbService().updateOrderStatus(
-                      docId: widget.order.id,
-                      data: {"status": "CANCELLED"},
-                    );
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text("Order Updated")),
-                    );
-                    Navigator.pop(context);
-                    Navigator.pop(context);
-                  },
-                  onNo: () => Navigator.pop(context),
-                ),
-              );
-            },
-            child: const Text("Cancel Order"),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 400),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: Tween<double>(begin: 0.9, end: 1.0).animate(
+              CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeOutBack,
+              ),
+            ),
+            child: child,
           ),
-        ],
+        );
+      },
+      child: Container(
+        key: ValueKey(status),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration:
+        BoxDecoration(color: bgColor, borderRadius: BorderRadius.circular(8)),
+        child: Text(status.replaceAll("_", " "),
+            style: const TextStyle(color: Colors.white, fontSize: 13)),
       ),
     );
   }
