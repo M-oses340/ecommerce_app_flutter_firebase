@@ -170,7 +170,7 @@ class _HomePageState extends State<HomePage>
               child: TextField(
                 onChanged: (value) => setState(() => _searchQuery = value),
                 decoration: InputDecoration(
-                  hintText: "Search products...",
+                  hintText: "Search items...",
                   hintStyle: theme.textTheme.bodyMedium
                       ?.copyWith(color: theme.hintColor),
                   prefixIcon: Icon(Icons.search, color: theme.iconTheme.color),
