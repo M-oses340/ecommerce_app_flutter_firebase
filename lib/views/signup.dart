@@ -1,6 +1,6 @@
-import 'package:ecommerce_app/controllers/auth_service.dart';
-import 'package:flutter/material.dart';
 import 'dart:ui';
+import 'package:flutter/material.dart';
+import 'package:ecommerce_app/controllers/auth_service.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -22,7 +22,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   final FocusNode _passwordFocus = FocusNode();
   final FocusNode _confirmFocus = FocusNode();
 
-  bool _obscureText = true;
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
 
   // Fade-in animation states
@@ -55,10 +56,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
 
     _buttonController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 400),
     );
     _buttonWidthAnimation = Tween<double>(begin: 1.0, end: 0.15).animate(
-      CurvedAnimation(parent: _buttonController, curve: Curves.easeInOut),
+      CurvedAnimation(parent: _buttonController, curve: Curves.easeInOutCubic),
     );
 
     final shakeTween = TweenSequence<double>([
@@ -84,13 +85,12 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       ),
     ]);
 
-
     _nameShake = shakeTween.animate(_shakeController);
     _emailShake = shakeTween.animate(_shakeController);
     _passwordShake = shakeTween.animate(_shakeController);
     _confirmShake = shakeTween.animate(_shakeController);
 
-    // Fade-in sequence
+    // Sequential fade-in animations
     Future.delayed(const Duration(milliseconds: 200), () => setState(() => _headerOpacity = 1.0));
     Future.delayed(const Duration(milliseconds: 400), () => setState(() => _nameOpacity = 1.0));
     Future.delayed(const Duration(milliseconds: 600), () => setState(() => _emailOpacity = 1.0));
@@ -103,10 +103,17 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
   void dispose() {
     _shakeController.dispose();
     _buttonController.dispose();
+
     _nameFocus.dispose();
     _emailFocus.dispose();
     _passwordFocus.dispose();
     _confirmFocus.dispose();
+
+    _nameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
+
     super.dispose();
   }
 
@@ -127,7 +134,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       curve: Curves.easeOut,
       builder: (context, translateY, _) {
         return AnimatedBuilder(
-          animation: shake ?? AlwaysStoppedAnimation(0),
+          animation: shake ?? const AlwaysStoppedAnimation(0),
           builder: (context, childWidget) {
             return Transform.translate(
               offset: Offset(shake?.value ?? 0, translateY),
@@ -141,7 +148,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                     boxShadow: focusNode?.hasFocus == true
                         ? [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
+
                         blurRadius: 10,
                         offset: const Offset(0, 5),
                       )
@@ -158,6 +166,72 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
       },
     );
   }
+
+  Future<void> _handleSignup(BuildContext context, double screenWidth) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+
+    final isValid = formKey.currentState!.validate();
+    if (!isValid) {
+      if (_nameController.text.isEmpty) {
+        _triggerShake('name');
+      }
+      if (_emailController.text.isEmpty) {
+        _triggerShake('email');
+      }
+      if (_passwordController.text.length < 8) {
+        _triggerShake('password');
+      }
+      if (_confirmPasswordController.text != _passwordController.text ||
+          _confirmPasswordController.text.isEmpty) {
+        _triggerShake('confirm');
+      }
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    await _buttonController.forward();
+
+    final result = await AuthService().createAccountWithEmail(
+      _nameController.text.trim(),
+      _emailController.text.trim(),
+      _passwordController.text,
+    );
+
+    // Safe context re-check
+    if (!mounted) return;
+
+    await _buttonController.reverse();
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    // ✅ No more direct context after async calls
+    if (result == "Account Created") {
+      scaffoldMessenger.showSnackBar(
+        const SnackBar(content: Text("Account Created")),
+      );
+
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+
+      navigator.restorablePushNamedAndRemoveUntil("/home", (route) => false);
+    } else {
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text(result, style: const TextStyle(color: Colors.white)),
+          backgroundColor: Colors.red.shade400,
+        ),
+      );
+    }
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -186,8 +260,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                           _animatedField(
                             opacity: _headerOpacity,
                             offset: 50,
-                            child: Column(
-                              children: const [
+                            child: const Column(
+                              children: [
                                 Text(
                                   "Sign Up",
                                   style: TextStyle(fontSize: 40, fontWeight: FontWeight.w700),
@@ -231,7 +305,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               child: TextFormField(
                                 focusNode: _emailFocus,
                                 controller: _emailController,
-                                validator: (value) => value!.isEmpty ? "Email cannot be empty." : null,
+                                validator: (value) =>
+                                value!.isEmpty ? "Email cannot be empty." : null,
                                 decoration: const InputDecoration(
                                   border: OutlineInputBorder(),
                                   labelText: "Email",
@@ -253,7 +328,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               child: TextFormField(
                                 focusNode: _passwordFocus,
                                 controller: _passwordController,
-                                obscureText: _obscureText,
+                                obscureText: _obscurePassword,
                                 validator: (value) => value!.length < 8
                                     ? "Password should have at least 8 characters."
                                     : null,
@@ -263,8 +338,9 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                   filled: true,
                                   fillColor: Colors.white,
                                   suffixIcon: IconButton(
-                                    icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off),
-                                    onPressed: () => setState(() => _obscureText = !_obscureText),
+                                    icon: Icon(
+                                        _obscurePassword ? Icons.visibility : Icons.visibility_off),
+                                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                                   ),
                                 ),
                               ),
@@ -282,7 +358,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                               child: TextFormField(
                                 focusNode: _confirmFocus,
                                 controller: _confirmPasswordController,
-                                obscureText: _obscureText,
+                                obscureText: _obscureConfirmPassword,
                                 validator: (value) {
                                   if (value!.isEmpty) return "Please confirm your password.";
                                   if (value != _passwordController.text) return "Passwords do not match.";
@@ -294,8 +370,11 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                   filled: true,
                                   fillColor: Colors.white,
                                   suffixIcon: IconButton(
-                                    icon: Icon(_obscureText ? Icons.visibility : Icons.visibility_off),
-                                    onPressed: () => setState(() => _obscureText = !_obscureText),
+                                    icon: Icon(_obscureConfirmPassword
+                                        ? Icons.visibility
+                                        : Icons.visibility_off),
+                                    onPressed: () => setState(
+                                            () => _obscureConfirmPassword = !_obscureConfirmPassword),
                                   ),
                                 ),
                               ),
@@ -319,43 +398,7 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                     child: ElevatedButton(
                                       onPressed: _isLoading
                                           ? null
-                                          : () async {
-                                        final isValid = formKey.currentState!.validate();
-                                        if (!isValid) {
-                                          if (_nameController.text.isEmpty) _triggerShake('name');
-                                          if (_emailController.text.isEmpty) _triggerShake('email');
-                                          if (_passwordController.text.length < 8) _triggerShake('password');
-                                          if (_confirmPasswordController.text != _passwordController.text ||
-                                              _confirmPasswordController.text.isEmpty) _triggerShake('confirm');
-                                          return;
-                                        }
-
-                                        setState(() => _isLoading = true);
-                                        await _buttonController.forward();
-
-                                        String result = await AuthService().createAccountWithEmail(
-                                          _nameController.text,
-                                          _emailController.text,
-                                          _passwordController.text,
-                                        );
-
-                                        await _buttonController.reverse();
-                                        setState(() => _isLoading = false);
-
-                                        if (result == "Account Created") {
-                                          ScaffoldMessenger.of(context)
-                                              .showSnackBar(const SnackBar(content: Text("Account Created")));
-                                          Navigator.restorablePushNamedAndRemoveUntil(
-                                              context, "/home", (route) => false);
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                              content: Text(result, style: const TextStyle(color: Colors.white)),
-                                              backgroundColor: Colors.red.shade400,
-                                            ),
-                                          );
-                                        }
-                                      },
+                                          : () => _handleSignup(context, screenWidth),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Theme.of(context).primaryColor,
                                         foregroundColor: Colors.white,
@@ -367,7 +410,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                                           ? const SizedBox(
                                         height: 24,
                                         width: 24,
-                                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3),
+                                        child: CircularProgressIndicator(
+                                            color: Colors.white, strokeWidth: 3),
                                       )
                                           : const Text("Sign Up", style: TextStyle(fontSize: 16)),
                                     ),
@@ -383,7 +427,10 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               const Text("Already have an account?"),
-                              TextButton(onPressed: () => Navigator.pop(context), child: const Text("Login")),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context),
+                                child: const Text("Login"),
+                              ),
                             ],
                           ),
                         ],
@@ -402,7 +449,8 @@ class _SignupPageState extends State<SignupPage> with TickerProviderStateMixin {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
                     child: Container(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
+
                     ),
                   ),
                 ),
