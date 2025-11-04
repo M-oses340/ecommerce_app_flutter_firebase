@@ -198,15 +198,26 @@ class _HomePageState extends State<HomePage>
                 slivers: [
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: PromoContainer(),
+                      padding: EdgeInsets.only(top: 10, left: 12, right: 12, bottom: 6),
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 6,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: PromoContainer(), // your existing promo widget
+                      ),
                     ),
                   ),
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: DiscountContainer(),
                     ),
                   ),
