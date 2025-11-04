@@ -13,14 +13,17 @@ import 'package:ecommerce_app/views/signup.dart';
 import 'package:ecommerce_app/views/specific_products.dart';
 import 'package:ecommerce_app/views/update_profile.dart';
 import 'package:ecommerce_app/views/view_product.dart';
+import 'package:ecommerce_app/widgets/no_internet_overlay.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
+import 'package:connectivity_plus/connectivity_plus.dart'; // 🟢 Added
+import 'package:ecommerce_app/providers/connectivity_provider.dart';
+import 'models/orders_model.dart';
 
-import 'models/orders_model.dart'; // 👈 Add shimmer package in pubspec.yaml
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -44,52 +47,108 @@ Future<void> main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  bool _isConnected = true; // 🟢 Added
+  final Connectivity _connectivity = Connectivity(); // 🟢 Added
+
+  @override
+  void initState() {
+    super.initState();
+    _monitorConnection(); // 🟢 Added
+  }
+
+  // 🟢 Updated for connectivity_plus >=6.0.0
+  void _monitorConnection() {
+    _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
+      final hasConnection = results.isNotEmpty &&
+          results.any((result) => result != ConnectivityResult.none);
+      setState(() {
+        _isConnected = hasConnection;
+      });
+    });
+  }
+
+  void _retryConnection() async {
+    final results = await _connectivity.checkConnectivity();
+    final hasConnection = results.isNotEmpty &&
+        results.any((result) => result != ConnectivityResult.none);
+    setState(() {
+      _isConnected = hasConnection;
+    });
+  }
+
+
+  @override
   Widget build(BuildContext context) {
+    // 🟠 Modified: Wrap MaterialApp with connection handling
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()), // 🟢 Added
       ],
-      child: MaterialApp(
-        title: 'eCommerce App',
-        debugShowCheckedModeBanner: false,
-        themeMode: ThemeMode.system,
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
-          brightness: Brightness.light,
-        ),
-        darkTheme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.blue,
-            brightness: Brightness.dark,
-          ),
-          useMaterial3: true,
-        ),
-        home: const SplashTransition(),
-        routes: {
-          "/login": (context) => const LoginPage(),
-          "/home": (context) => const HomeNav(),
-          "/signup": (context) => const SignupPage(),
-          "/update_profile": (context) => const UpdateProfile(),
-          "/discount": (context) => const DiscountPage(),
-          "/specific": (context) => const SpecificProducts(),
-          "/view_product": (context) => const ViewProduct(),
-          "/cart": (context) => const CartPage(),
-          "/checkout": (context) => const CheckoutPage(),
-          "/orders": (context) => const OrdersPage(),
-          "/view_order": (context) {
-            final order = ModalRoute.of(context)!.settings.arguments as OrdersModel;
-            return ViewOrder(order: order);
-          },
+      child: Consumer<ConnectivityProvider>(
+        builder: (context, connectivity, _) {
+          return MaterialApp(
+            title: 'eCommerce App',
+            debugShowCheckedModeBanner: false,
+            themeMode: ThemeMode.system,
+            theme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+              useMaterial3: true,
+              brightness: Brightness.light,
+            ),
+            darkTheme: ThemeData(
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.blue,
+                brightness: Brightness.dark,
+              ),
+              useMaterial3: true,
+            ),
+            home: Consumer<ConnectivityProvider>(
+              builder: (context, connectivity, child) {
+                return Stack(
+                  children: [
+                    const SplashTransition(),
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 400),
+                      child: connectivity.isOnline ? const SizedBox() : const NoInternetOverlay(),
+                    ),
+                  ],
+                );
+              },
+            ),
 
+
+            routes: {
+              "/login": (context) => const LoginPage(),
+              "/home": (context) => const HomeNav(),
+              "/signup": (context) => const SignupPage(),
+              "/update_profile": (context) => const UpdateProfile(),
+              "/discount": (context) => const DiscountPage(),
+              "/specific": (context) => const SpecificProducts(),
+              "/view_product": (context) => const ViewProduct(),
+              "/cart": (context) => const CartPage(),
+              "/checkout": (context) => const CheckoutPage(),
+              "/orders": (context) => const OrdersPage(),
+              "/view_order": (context) {
+                final order =
+                ModalRoute.of(context)!.settings.arguments as OrdersModel;
+                return ViewOrder(order: order);
+              },
+            },
+          );
         },
       ),
     );
+
   }
 }
 
@@ -156,7 +215,8 @@ class _SplashTransitionState extends State<SplashTransition>
           pageBuilder: (_, __, ___) => const CheckUser(),
           transitionDuration: const Duration(milliseconds: 900),
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
-            final fade = CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+            final fade =
+            CurvedAnimation(parent: animation, curve: Curves.easeInOut);
             final scale = Tween<double>(begin: 0.95, end: 1.0).animate(fade);
             return FadeTransition(
               opacity: fade,
@@ -182,7 +242,8 @@ class _SplashTransitionState extends State<SplashTransition>
     final size = MediaQuery.of(context).size;
     final double logoSize = size.width * 0.35;
 
-    final backgroundColor = isDark ? const Color(0xFF0A192F) : const Color(0xFF2196F3);
+    final backgroundColor =
+    isDark ? const Color(0xFF0A192F) : const Color(0xFF2196F3);
     final spinnerColor = isDark ? Colors.blueAccent.shade100 : Colors.white;
     final textColor = isDark ? Colors.white70 : Colors.white;
     final shimmerBase = isDark ? Colors.white54 : Colors.white70;
@@ -210,8 +271,6 @@ class _SplashTransitionState extends State<SplashTransition>
               ),
             ),
             const SizedBox(height: 24),
-
-            // ✨ Shimmering App Name
             Shimmer.fromColors(
               baseColor: shimmerBase!,
               highlightColor: shimmerHighlight!,
@@ -225,7 +284,6 @@ class _SplashTransitionState extends State<SplashTransition>
                 ),
               ),
             ),
-
             const SizedBox(height: 40),
             FadeTransition(
               opacity: _spinnerController,
