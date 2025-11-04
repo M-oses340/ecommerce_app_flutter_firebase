@@ -169,25 +169,27 @@ class _PromoContainerState extends State<PromoContainer> {
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
+                            // 📸 Banner image
                             Image.network(
                               promo.image,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Container(color: Colors.grey.shade300),
                             ),
+                            // 🌈 Gradient overlay
                             Container(
                               decoration: BoxDecoration(
                                 gradient: LinearGradient(
                                   begin: Alignment.bottomCenter,
                                   end: Alignment.center,
                                   colors: [
-                                    Colors.black.withOpacity(0.6),
+                                    Colors.black.withOpacity(0.65),
                                     Colors.transparent,
                                   ],
                                 ),
                               ),
                             ),
-                            // 🟩 Animated badge
+                            // 🟨 Animated category badge
                             Positioned(
                               top: 12,
                               left: 12,
@@ -220,10 +222,11 @@ class _PromoContainerState extends State<PromoContainer> {
                                 ),
                               ),
                             ),
-                            // 📝 Title and subtitle
+                            // 🏷️ Title & CTA
                             Positioned(
                               left: 16,
                               bottom: 20,
+                              right: 16,
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -235,12 +238,38 @@ class _PromoContainerState extends State<PromoContainer> {
                                       fontSize: 22,
                                     ),
                                   ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    "Shop Now →",
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: Colors.white70,
-                                      fontSize: 14,
+                                  const SizedBox(height: 12),
+                                  // 🛒 Shop Now button
+                                  AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 500),
+                                    opacity: isActive ? 1.0 : 0.0,
+                                    child: ElevatedButton(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.white,
+                                        foregroundColor: Colors.black87,
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                          BorderRadius.circular(24),
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 20,
+                                          vertical: 10,
+                                        ),
+                                      ),
+                                      onPressed: () {
+                                        Navigator.pushNamed(
+                                          context,
+                                          "/specific",
+                                          arguments: {"name": promo.category},
+                                        );
+                                      },
+                                      child: const Text(
+                                        "Shop Now",
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                          fontSize: 14,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -255,7 +284,7 @@ class _PromoContainerState extends State<PromoContainer> {
               ),
             ),
             const SizedBox(height: 10),
-            // Dots Indicator
+            // ⚪ Dots indicator
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: promos.asMap().entries.map((entry) {
