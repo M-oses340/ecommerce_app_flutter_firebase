@@ -19,21 +19,19 @@ class CheckoutPage extends StatefulWidget {
 }
 
 class _CheckoutPageState extends State<CheckoutPage> {
-  TextEditingController _couponController = TextEditingController();
-  TextEditingController _mpesaPhoneController = TextEditingController();
+  final TextEditingController _couponController = TextEditingController();
+  final TextEditingController _mpesaPhoneController = TextEditingController();
 
   int discount = 0;
   String discountText = "";
   bool paymentSuccess = false;
-  String? orderId; // ✅ Added orderId here
+  String? orderId;
 
-  // 🔹 Calculate Discount
   void discountCalculator(int disPercent, int totalCost) {
     discount = (disPercent * totalCost) ~/ 100;
     setState(() {});
   }
 
-  // 🔹 Initialize Stripe Payment Sheet
   Future<void> initPaymentSheet(int cost) async {
     try {
       final user = Provider.of<UserProvider>(context, listen: false);
@@ -43,6 +41,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
         amount: (cost * 100).toString(),
       );
 
+      final brightness = Theme.of(context).brightness;
+      final style = brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
+
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           customFlow: false,
@@ -50,66 +51,54 @@ class _CheckoutPageState extends State<CheckoutPage> {
           paymentIntentClientSecret: data['client_secret'],
           customerEphemeralKeySecret: data['ephemeralKey'],
           customerId: data['id'],
-          style: ThemeMode.dark,
+          style: style,
         ),
       );
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Stripe Error: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Stripe Error: $e')));
     }
   }
 
-  // 🔹 Handle Stripe Payment
   Future<void> handleStripePayment(int cost) async {
     await initPaymentSheet(cost);
     try {
       await Stripe.instance.presentPaymentSheet();
       await createOrderAfterPayment("Stripe");
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Stripe payment failed: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Stripe payment failed: $e")));
     }
   }
 
-  // 🔹 Handle M-Pesa Payment
   Future<void> handleMpesaPayment(int cost) async {
     try {
       String phone = _mpesaPhoneController.text.trim();
 
       if (phone.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Please enter your M-Pesa phone number")),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("Please enter your M-Pesa phone number")));
         return;
       }
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Initiating M-Pesa payment...")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("Initiating M-Pesa payment...")));
 
-      // ✅ 1. Pre-create the order if it doesn’t exist
       if (orderId == null) {
         orderId = await createOrderAfterPayment("M-Pesa (Pending)", preCreateOnly: true);
       }
 
-      // ✅ 2. Initiate STK Push (pass the same Firestore orderId)
       final response = await MpesaService.initiatePayment(
         phone: phone,
         amount: cost,
-        orderId: orderId!, // must be the Firestore doc ID
+        orderId: orderId!,
       );
 
-      // ✅ 3. Handle M-Pesa API response
       if (response["ResponseCode"] == "0") {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("STK Push sent! Check your phone to complete payment."),
-          ),
+          SnackBar(content: Text("STK Push sent! Check your phone to complete payment.")),
         );
 
-        // ⚠️ Don't mark as PAID yet — payment is only confirmed via callback
         await DbService().updateOrderStatus(
           docId: orderId!,
           data: {"payment_method": "M-Pesa (Pending)", "status": "PENDING"},
@@ -118,15 +107,12 @@ class _CheckoutPageState extends State<CheckoutPage> {
         throw Exception(response["errorMessage"] ?? "M-Pesa initiation failed");
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("M-Pesa Error: $e")),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("M-Pesa Error: $e")));
     }
   }
 
-  // 🔹 Create Order in Firestore
-  Future<String> createOrderAfterPayment(String method,
-      {bool preCreateOnly = false}) async {
+  Future<String> createOrderAfterPayment(String method, {bool preCreateOnly = false}) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final user = Provider.of<UserProvider>(context, listen: false);
     User? currentUser = FirebaseAuth.instance.currentUser;
@@ -157,27 +143,20 @@ class _CheckoutPageState extends State<CheckoutPage> {
       "created_at": DateTime.now().millisecondsSinceEpoch
     };
 
-    // ✅ Create new order if not already created
     if (orderId == null) {
       final orderRef = await DbService().createOrder(data: orderData);
       orderId = orderRef.id;
     } else if (!preCreateOnly) {
-      await DbService().updateOrderStatus(
-        docId: orderId!,
-        data: {"status": "PAID"},
-      );
+      await DbService().updateOrderStatus(docId: orderId!, data: {"status": "PAID"});
     }
 
     if (!preCreateOnly) {
       await afterPaymentSuccess(method);
     }
 
-    // ✅ Return Firestore document ID so caller can use it
     return orderId!;
   }
 
-
-  // 🔹 Shared logic after successful payment
   Future<void> afterPaymentSuccess(String method) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final user = Provider.of<UserProvider>(context, listen: false);
@@ -193,23 +172,29 @@ class _CheckoutPageState extends State<CheckoutPage> {
     paymentSuccess = true;
 
     if (paymentSuccess) {
-      MailService()
-          .sendMailFromGmail(user.email, OrdersModel.fromJson({}, orderId!));
+      MailService().sendMailFromGmail(user.email, OrdersModel.fromJson({}, orderId!));
     }
 
     Navigator.pop(context);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Order placed successfully")),
-    );
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text("Order placed successfully")));
   }
 
-  // 🔹 UI
   @override
   Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    final bgColor = isDark ? const Color(0xFF1E1E1E) : Colors.white;
+    final cardColor = isDark ? const Color(0xFF2C2C2C) : Colors.grey.shade200;
+    final textColor = isDark ? Colors.white70 : Colors.black87;
+
     return Scaffold(
+      backgroundColor: bgColor,
       appBar: AppBar(
-        title: Text("Checkout", style: TextStyle(fontSize: 22)),
+        title: const Text("Checkout", style: TextStyle(fontSize: 22)),
         scrolledUnderElevation: 0,
+        backgroundColor: isDark ? Colors.black : Colors.white,
+        foregroundColor: textColor,
       ),
       body: SingleChildScrollView(
         child: Consumer<UserProvider>(
@@ -222,12 +207,14 @@ class _CheckoutPageState extends State<CheckoutPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text("Delivery Details",
-                          style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                          style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                              color: textColor)),
                       Container(
-                        padding: EdgeInsets.all(16),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Colors.grey.shade200,
+                          color: cardColor,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(children: [
@@ -239,86 +226,105 @@ class _CheckoutPageState extends State<CheckoutPage> {
                                 Text(userData.name,
                                     style: TextStyle(
                                         fontSize: 16,
-                                        fontWeight: FontWeight.w500)),
-                                Text(userData.email),
-                                Text(userData.address),
-                                Text(userData.phone),
+                                        fontWeight: FontWeight.w500,
+                                        color: textColor)),
+                                Text(userData.email, style: TextStyle(color: textColor)),
+                                Text(userData.address, style: TextStyle(color: textColor)),
+                                Text(userData.phone, style: TextStyle(color: textColor)),
                               ],
                             ),
                           ),
-                          Spacer(),
+                          const Spacer(),
                           IconButton(
-                            onPressed: () {
-                              Navigator.pushNamed(context, "/update_profile");
-                            },
-                            icon: Icon(Icons.edit_outlined),
+                            onPressed: () => Navigator.pushNamed(context, "/update_profile"),
+                            icon: Icon(Icons.edit_outlined, color: textColor),
                           )
                         ]),
                       ),
-                      SizedBox(height: 20),
-                      Text("Have a coupon?"),
+                      const SizedBox(height: 20),
+                      Text("Have a coupon?", style: TextStyle(color: textColor)),
                       Row(
                         children: [
                           SizedBox(
                             width: 200,
                             child: TextFormField(
                               controller: _couponController,
+                              style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: "Coupon Code",
+                                labelStyle: TextStyle(color: textColor.withOpacity(0.7)),
                                 filled: true,
-                                fillColor: Colors.grey.shade200,
+                                fillColor: cardColor,
+                                enabledBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                                ),
+                                focusedBorder: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                  borderSide: BorderSide(color: textColor.withOpacity(0.5)),
+                                ),
                               ),
                             ),
                           ),
                           TextButton(
                             onPressed: () async {
                               QuerySnapshot querySnapshot = await DbService()
-                                  .verifyDiscount(
-                                  code:
-                                  _couponController.text.toUpperCase());
+                                  .verifyDiscount(code: _couponController.text.toUpperCase());
                               if (querySnapshot.docs.isNotEmpty) {
-                                QueryDocumentSnapshot doc =
-                                    querySnapshot.docs.first;
+                                QueryDocumentSnapshot doc = querySnapshot.docs.first;
                                 int percent = doc.get('discount');
-                                discountText =
-                                "A discount of $percent% has been applied.";
-                                discountCalculator(
-                                    percent, cartData.totalCost);
+                                discountText = "A discount of $percent% has been applied.";
+                                discountCalculator(percent, cartData.totalCost);
                               } else {
                                 discountText = "No discount code found";
                               }
                               setState(() {});
                             },
-                            child: Text("Apply"),
+                            child: const Text("Apply"),
                           )
                         ],
                       ),
-                      if (discountText.isNotEmpty) Text(discountText),
-                      Divider(),
-                      Text("Total Quantity: ${cartData.totalQuantity}"),
-                      Text("Sub Total: ₹ ${cartData.totalCost}"),
-                      Text("Extra Discount: - ₹ $discount"),
-                      Divider(),
-                      Text("Total Payable: ₹ $total",
+                      if (discountText.isNotEmpty)
+                        Text(discountText, style: TextStyle(color: textColor)),
+                      const Divider(),
+                      Text("Total Quantity: ${cartData.totalQuantity}",
+                          style: TextStyle(color: textColor)),
+                      Text("Sub Total: KSh ${cartData.totalCost}",
+                          style: TextStyle(color: textColor)),
+                      Text("Extra Discount: - KSh $discount",
+                          style: TextStyle(color: textColor)),
+                      const Divider(),
+                      Text("Total Payable: KSh $total",
                           style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w500)),
-                      SizedBox(height: 20),
-                      Text("Pay with M-Pesa"),
+                              fontSize: 18, fontWeight: FontWeight.w500, color: textColor)),
+                      const SizedBox(height: 20),
+                      Text("Pay with M-Pesa", style: TextStyle(color: textColor)),
                       TextField(
                         controller: _mpesaPhoneController,
                         keyboardType: TextInputType.phone,
+                        style: TextStyle(color: textColor),
                         decoration: InputDecoration(
-                            hintText: "Enter M-Pesa phone number",
-                            filled: true,
-                            fillColor: Colors.grey.shade200),
+                          hintText: "Enter M-Pesa phone number",
+                          hintStyle: TextStyle(color: textColor.withOpacity(0.6)),
+                          filled: true,
+                          fillColor: cardColor,
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: textColor.withOpacity(0.5)),
+                          ),
+                        ),
                       ),
-                      SizedBox(height: 10),
+                      const SizedBox(height: 10),
                       ElevatedButton(
                         onPressed: () => handleMpesaPayment(total),
                         style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.green,
                             foregroundColor: Colors.white),
-                        child: Text("Pay with M-Pesa"),
+                        child: const Text("Pay with M-Pesa"),
                       ),
                       const SizedBox(height: 10),
                       ElevatedButton(

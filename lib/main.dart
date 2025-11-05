@@ -9,6 +9,7 @@ import 'package:ecommerce_app/views/discount_page.dart';
 import 'package:ecommerce_app/views/home_nav.dart';
 import 'package:ecommerce_app/views/login.dart';
 import 'package:ecommerce_app/views/orders_page.dart';
+import 'package:ecommerce_app/views/search_view.dart';
 import 'package:ecommerce_app/views/signup.dart';
 import 'package:ecommerce_app/views/specific_products.dart';
 import 'package:ecommerce_app/views/update_profile.dart';
@@ -137,6 +138,7 @@ class _MyAppState extends State<MyApp> {
               "/view_product": (context) => const ViewProduct(),
               "/cart": (context) => const CartPage(),
               "/checkout": (context) => const CheckoutPage(),
+              '/search': (_) => const SearchView(),
               "/orders": (context) => const OrdersPage(),
               "/view_order": (context) {
                 final order =

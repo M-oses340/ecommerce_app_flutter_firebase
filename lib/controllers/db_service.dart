@@ -5,7 +5,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class DbService {
-  /// ✅ Always fetch current user dynamically
   String? get uid => FirebaseAuth.instance.currentUser?.uid;
 
   // ============================
@@ -45,8 +44,7 @@ class DbService {
 
   Stream<DocumentSnapshot> readUserData() {
     final userId = uid;
-    if (userId == null) return const Stream.empty(); // safe fallback
-
+    if (userId == null) return const Stream.empty();
     return FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
@@ -73,7 +71,6 @@ class DbService {
   Stream<QuerySnapshot> readUserCart() {
     final userId = uid;
     if (userId == null) return const Stream.empty();
-
     return FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
@@ -113,7 +110,6 @@ class DbService {
   Future<void> deleteItemFromCart({required String productId}) async {
     final userId = uid;
     if (userId == null) return;
-
     await FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
@@ -121,14 +117,13 @@ class DbService {
         .doc(productId)
         .delete();
   }
-  /// 🔹 Reduce product quantity in stock
+
   Future<void> reduceQuantity({
     required String productId,
     required int quantity,
   }) async {
-    final userId = uid; // not used here, but keeping pattern
-    final productRef = FirebaseFirestore.instance.collection("shop_products").doc(productId);
-
+    final productRef =
+    FirebaseFirestore.instance.collection("shop_products").doc(productId);
     final doc = await productRef.get();
     if (doc.exists) {
       int currentStock = doc["maxQuantity"] ?? 0;
@@ -138,11 +133,9 @@ class DbService {
     }
   }
 
-
   Future<void> decreaseCount({required String productId}) async {
     final userId = uid;
     if (userId == null) return;
-
     await FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
@@ -154,12 +147,10 @@ class DbService {
   Future<void> emptyCart() async {
     final userId = uid;
     if (userId == null) return;
-
     final cartRef = FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
         .collection("cart");
-
     final snapshot = await cartRef.get();
     WriteBatch batch = FirebaseFirestore.instance.batch();
     for (var doc in snapshot.docs) {
@@ -175,7 +166,6 @@ class DbService {
   Stream<QuerySnapshot> readOrders() {
     final userId = uid;
     if (userId == null) return const Stream.empty();
-
     return FirebaseFirestore.instance
         .collection("shop_orders")
         .where("user_id", isEqualTo: userId)
@@ -183,7 +173,9 @@ class DbService {
         .snapshots();
   }
 
-  Future<DocumentReference> createOrder({required Map<String, dynamic> data}) async {
+  Future<DocumentReference> createOrder({
+    required Map<String, dynamic> data,
+  }) async {
     return await FirebaseFirestore.instance.collection("shop_orders").add(data);
   }
 
@@ -191,16 +183,21 @@ class DbService {
     required String docId,
     required Map<String, dynamic> data,
   }) async {
-    await FirebaseFirestore.instance.collection("shop_orders").doc(docId).update(data);
+    await FirebaseFirestore.instance
+        .collection("shop_orders")
+        .doc(docId)
+        .update(data);
   }
 
   // ============================
   // 🔹 OTHER STREAMS
   // ============================
 
-  Stream<QuerySnapshot> readPromos() => FirebaseFirestore.instance.collection("shop_promos").snapshots();
+  Stream<QuerySnapshot> readPromos() =>
+      FirebaseFirestore.instance.collection("shop_promos").snapshots();
 
-  Stream<QuerySnapshot> readBanners() => FirebaseFirestore.instance.collection("shop_banners").snapshots();
+  Stream<QuerySnapshot> readBanners() =>
+      FirebaseFirestore.instance.collection("shop_banners").snapshots();
 
   Stream<QuerySnapshot> readDiscounts() => FirebaseFirestore.instance
       .collection("shop_coupons")
@@ -208,16 +205,58 @@ class DbService {
       .snapshots();
 
   Future<QuerySnapshot> verifyDiscount({required String code}) =>
-      FirebaseFirestore.instance.collection("shop_coupons").where("code", isEqualTo: code).get();
+      FirebaseFirestore.instance
+          .collection("shop_coupons")
+          .where("code", isEqualTo: code)
+          .get();
 
   Stream<QuerySnapshot> readCategories() => FirebaseFirestore.instance
       .collection("shop_categories")
       .orderBy("priority", descending: true)
       .snapshots();
 
-  Stream<QuerySnapshot> readProducts(String category) =>
-      FirebaseFirestore.instance.collection("shop_products").where("category", isEqualTo: category.toLowerCase()).snapshots();
+  Stream<QuerySnapshot> readProducts(String category) => FirebaseFirestore
+      .instance
+      .collection("shop_products")
+      .where("category", isEqualTo: category.toLowerCase())
+      .snapshots();
 
   Stream<QuerySnapshot> searchProducts(List<String> docIds) =>
-      FirebaseFirestore.instance.collection("shop_products").where(FieldPath.documentId, whereIn: docIds).snapshots();
+      FirebaseFirestore.instance
+          .collection("shop_products")
+          .where(FieldPath.documentId, whereIn: docIds)
+          .snapshots();
+
+  Stream<List<Map<String, dynamic>>> searchByKeyword(String query) async* {
+    print("🟢 [DbService] Listening for search: '$query'");
+
+    final collection = FirebaseFirestore.instance.collection("shop_products");
+
+    await for (final snapshot in collection.snapshots()) {
+      // ✅ Include document ID inside each map
+      final allProducts = snapshot.docs
+          .map((doc) => {
+        "id": doc.id,
+        ...doc.data(),
+      })
+          .toList();
+
+      if (query.isEmpty) {
+        print("📡 [DbService] Returning all ${allProducts.length} products (empty query)");
+        yield allProducts;
+      } else {
+        final q = query.toLowerCase();
+        final filtered = allProducts.where((p) {
+          final name = (p["name"] ?? "").toString().toLowerCase();
+          final category = (p["category"] ?? "").toString().toLowerCase();
+          final desc = (p["desc"] ?? "").toString().toLowerCase();
+          return name.contains(q) || category.contains(q) || desc.contains(q);
+        }).toList();
+
+        print("📡 [DbService] Found ${filtered.length} matches for '$query'");
+        yield filtered;
+      }
+    }
+  }
+
 }

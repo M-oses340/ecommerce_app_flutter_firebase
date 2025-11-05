@@ -1,22 +1,15 @@
 import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:ecommerce_app/controllers/db_service.dart';
+import 'package:ecommerce_app/models/products_model.dart';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:ecommerce_app/controllers/db_service.dart';
-import 'package:ecommerce_app/models/categories_model.dart';
-import 'package:ecommerce_app/models/promo_banners_model.dart';
-import 'package:ecommerce_app/models/products_model.dart';
-import 'package:ecommerce_app/containers/banner_container.dart';
-import 'package:ecommerce_app/containers/zone_container.dart';
 
 class HomePageMakerContainer extends StatefulWidget {
-  final String searchQuery; // 🔍 search text (optional)
+  final String searchQuery;
 
-  const HomePageMakerContainer({
-    super.key,
-    this.searchQuery = "",
-  });
+  const HomePageMakerContainer({super.key, this.searchQuery = ""});
 
   @override
   State<HomePageMakerContainer> createState() => _HomePageMakerContainerState();
@@ -26,8 +19,6 @@ class _HomePageMakerContainerState extends State<HomePageMakerContainer> {
   final DbService _db = DbService();
   bool _isConnected = true;
   StreamSubscription<List<ConnectivityResult>>? _connectivitySub;
-
-  int _minLength(int a, int b) => a > b ? b : a;
 
   @override
   void initState() {
@@ -44,8 +35,8 @@ class _HomePageMakerContainerState extends State<HomePageMakerContainer> {
 
   Future<void> _checkConnection() async {
     final results = await Connectivity().checkConnectivity();
-    final connected = results.any((r) =>
-    r == ConnectivityResult.mobile || r == ConnectivityResult.wifi);
+    final connected = results.any(
+            (r) => r == ConnectivityResult.mobile || r == ConnectivityResult.wifi);
     setState(() => _isConnected = connected);
   }
 
@@ -57,68 +48,49 @@ class _HomePageMakerContainerState extends State<HomePageMakerContainer> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isConnected) {
-      return _noInternetPlaceholder();
-    }
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
-    // 👇 If user is searching, show search results
+    if (!_isConnected) return _noInternetWidget(theme, isDark);
+
+    // 🔍 Show search results if user is searching
     if (widget.searchQuery.isNotEmpty) {
-      return _buildSearchResults(widget.searchQuery);
+      return _buildSearchResults(widget.searchQuery, theme, isDark);
     }
 
-    // 👇 Otherwise show normal homepage (categories + banners + products)
+    // 🛍️ Show all products (Firestore stream)
     return StreamBuilder(
-      stream: _db.readCategories(),
-      builder: (context, categorySnapshot) {
-        if (categorySnapshot.connectionState == ConnectionState.waiting) {
-          return _loadingShimmer();
+      stream: FirebaseFirestore.instance
+          .collection("shop_products")
+          .orderBy("created_at", descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _loadingShimmer(isDark);
         }
 
-        if (!categorySnapshot.hasData || categorySnapshot.data!.docs.isEmpty) {
-          return const SizedBox();
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20.0),
+              child: Text("No products available 🛒",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+            ),
+          );
         }
 
-        final categories =
-        CategoriesModel.fromJsonList(categorySnapshot.data!.docs);
+        final products = ProductsModel.fromJsonList(snapshot.data!.docs);
 
-        return StreamBuilder(
-          stream: _db.readBanners(),
-          builder: (context, bannerSnapshot) {
-            if (!bannerSnapshot.hasData || bannerSnapshot.data!.docs.isEmpty) {
-              return const SizedBox();
-            }
-
-            final banners =
-            PromoBannersModel.fromJsonList(bannerSnapshot.data!.docs);
-            final total = _minLength(categories.length, banners.length);
-
-            return Column(
-              children: List.generate(total, (i) {
-                final category = categories[i];
-                final banner = banners[i];
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    ZoneContainer(category: category.name),
-                    BannerContainer(
-                      image: banner.image,
-                      category: banner.category,
-                    ),
-                    _buildProductsCarousel(category.name),
-                    const SizedBox(height: 16),
-                  ],
-                );
-              }),
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: _checkConnection,
+          child: _buildProductGrid(products, theme, isDark),
         );
       },
     );
   }
 
-  /// 🔍 Builds the Firestore search result grid
-  Widget _buildSearchResults(String query) {
+  /// 🔍 Search results
+  Widget _buildSearchResults(String query, ThemeData theme, bool isDark) {
     return StreamBuilder(
       stream: FirebaseFirestore.instance
           .collection("shop_products")
@@ -126,145 +98,126 @@ class _HomePageMakerContainerState extends State<HomePageMakerContainer> {
           .snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return _loadingShimmer(height: 200);
+          return _loadingShimmer(isDark);
         }
 
         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
           return const Center(
             child: Padding(
               padding: EdgeInsets.all(20.0),
-              child: Text(
-                "No products found 🛍️",
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-              ),
+              child: Text("No products found 🛍️",
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
             ),
           );
         }
 
         final results = ProductsModel.fromJsonList(snapshot.data!.docs);
 
-        return GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
-            mainAxisSpacing: 10,
-            crossAxisSpacing: 10,
-            childAspectRatio: 0.7,
-          ),
-          itemCount: results.length,
-          itemBuilder: (context, index) {
-            return _ProductCard(product: results[index]);
-          },
-        );
+        return _buildProductGrid(results, theme, isDark);
       },
     );
   }
 
-  /// 🛍️ Builds horizontal product list per category
-  Widget _buildProductsCarousel(String categoryName) {
-    return StreamBuilder(
-      stream: _db.readProducts(categoryName),
-      builder: (context, productSnapshot) {
-        if (productSnapshot.connectionState == ConnectionState.waiting) {
-          return _loadingShimmer(height: 160);
-        }
+  /// 🧱 Build product grid
+  Widget _buildProductGrid(
+      List<ProductsModel> products, ThemeData theme, bool isDark) {
+    final width = MediaQuery.of(context).size.width;
+    final crossAxisCount = width < 600 ? 2 : 3;
 
-        if (!productSnapshot.hasData || productSnapshot.data!.docs.isEmpty) {
-          return const SizedBox();
-        }
-
-        final products =
-        ProductsModel.fromJsonList(productSnapshot.data!.docs);
-
-        return SizedBox(
-          height: 260,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: products.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, index) {
-              final product = products[index];
-              return _ProductCard(product: product);
-            },
-          ),
-        );
-      },
-    );
-  }
-
-  /// 💡 Shimmer loader for loading states
-  Widget _loadingShimmer({double height = 400}) {
-    return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
-      child: Container(
-        height: height,
-        width: double.infinity,
-        color: Colors.white,
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      physics: const BouncingScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.7,
       ),
+      itemCount: products.length,
+      itemBuilder: (context, index) {
+        return _ProductCard(product: products[index], isDark: isDark);
+      },
     );
   }
 
-  /// 🚫 No Internet Placeholder
-  Widget _noInternetPlaceholder() {
+  /// ✨ Shimmer loader
+  Widget _loadingShimmer(bool isDark) {
+    return GridView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: 6,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 0.7,
+      ),
+      itemBuilder: (context, index) {
+        return Shimmer.fromColors(
+          baseColor: isDark ? Colors.grey.shade800 : Colors.grey.shade300,
+          highlightColor: isDark ? Colors.grey.shade600 : Colors.grey.shade100,
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.grey.shade900 : Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// 🚫 No internet placeholder
+  Widget _noInternetWidget(ThemeData theme, bool isDark) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.wifi_off, color: Colors.redAccent, size: 60),
-          const SizedBox(height: 12),
-          const Text(
+          const Icon(Icons.wifi_off_rounded, color: Colors.redAccent, size: 60),
+          const SizedBox(height: 16),
+          Text(
             "No Internet Connection",
-            style: TextStyle(
-              fontSize: 18,
+            style: theme.textTheme.titleMedium?.copyWith(
+              color: isDark ? Colors.white70 : Colors.black87,
               fontWeight: FontWeight.w600,
-              color: Colors.black54,
             ),
           ),
           const SizedBox(height: 8),
           TextButton.icon(
             onPressed: _checkConnection,
             icon: const Icon(Icons.refresh, color: Colors.blue),
-            label: const Text(
-              "Retry",
-              style: TextStyle(color: Colors.blue),
-            ),
-          )
+            label: const Text("Retry", style: TextStyle(color: Colors.blue)),
+          ),
         ],
       ),
     );
   }
 }
 
+/// 🏷 Product Card
 class _ProductCard extends StatelessWidget {
   final ProductsModel product;
+  final bool isDark;
 
-  const _ProductCard({required this.product});
+  const _ProductCard({required this.product, required this.isDark});
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
-      onTap: () {
-        Navigator.pushNamed(
-          context,
-          "/view_product",
-          arguments: product,
-        );
-      },
+      onTap: () =>
+          Navigator.pushNamed(context, "/view_product", arguments: product),
       child: Container(
-        width: 160,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: isDark ? theme.colorScheme.surface : Colors.white,
           borderRadius: BorderRadius.circular(12),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
-              blurRadius: 6,
-              offset: const Offset(0, 3),
-            ),
+            if (!isDark)
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
           ],
         ),
         child: Column(
@@ -275,43 +228,42 @@ class _ProductCard extends StatelessWidget {
               child: ClipRRect(
                 borderRadius:
                 const BorderRadius.vertical(top: Radius.circular(12)),
-                child: Image.network(
+                child: product.image.isNotEmpty
+                    ? Image.network(
                   product.image,
                   height: 130,
                   width: double.infinity,
                   fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) => Container(
-                    color: Colors.grey.shade200,
-                    alignment: Alignment.center,
-                    child: const Icon(
-                      Icons.broken_image_outlined,
-                      size: 40,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
+                  errorBuilder: (_, __, ___) => _placeholder(),
+                )
+                    : _placeholder(),
               ),
             ),
+
+            // 🏷 Product name
             Padding(
-              padding: const EdgeInsets.all(8.0),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
               child: Text(
                 product.name,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.white70 : Colors.black87,
+                ),
               ),
             ),
+
+            // 💵 Product price
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
+              padding:
+              const EdgeInsets.only(left: 8.0, right: 8.0, bottom: 8.0),
               child: Text(
                 "Ksh ${product.new_price}",
-                style: const TextStyle(
-                  fontSize: 13,
+                style: TextStyle(
                   fontWeight: FontWeight.bold,
-                  color: Colors.green,
+                  color: Colors.green.shade600,
                 ),
               ),
             ),
@@ -320,4 +272,10 @@ class _ProductCard extends StatelessWidget {
       ),
     );
   }
+
+  Widget _placeholder() => Container(
+    height: 130,
+    color: Colors.grey.shade200,
+    child: const Icon(Icons.image_not_supported_outlined, size: 40),
+  );
 }

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:ecommerce_app/views/search_view.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -8,6 +9,7 @@ import 'package:ecommerce_app/containers/promo_container.dart';
 import 'package:ecommerce_app/models/products_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
+
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -46,19 +48,16 @@ class _HomePageState extends State<HomePage>
       vsync: this,
       duration: const Duration(milliseconds: 400),
     );
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, -1),
-      end: const Offset(0, 0),
-    ).animate(
-        CurvedAnimation(parent: _slideController, curve: Curves.easeInOut));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, -1), end: Offset.zero).animate(
+            CurvedAnimation(parent: _slideController, curve: Curves.easeInOut));
 
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
     _pulseAnimation = Tween<double>(begin: 1.0, end: 1.05).animate(
-      CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut),
-    );
+        CurvedAnimation(parent: _pulseController, curve: Curves.easeInOut));
 
     _fadeController = AnimationController(
       vsync: this,
@@ -161,28 +160,35 @@ class _HomePageState extends State<HomePage>
         child: SafeArea(
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            child: Container(
-              height: 45,
-              decoration: BoxDecoration(
-                color: theme.cardColor,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: TextField(
-                onChanged: (value) => setState(() => _searchQuery = value),
-                decoration: InputDecoration(
-                  hintText: "Search on ShopEasy...",
-                  hintStyle: theme.textTheme.bodyMedium
-                      ?.copyWith(color: theme.hintColor),
-                  prefixIcon: Icon(Icons.search, color: theme.iconTheme.color),
-                  suffixIcon: IconButton(
-                    icon: Icon(Icons.mic, color: theme.iconTheme.color),
-                    onPressed: () {},
-                  ),
-                  border: InputBorder.none,
-                  contentPadding:
-                  const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+            child: InkWell(
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SearchView()),
+                );
+              },
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                height: 45,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
                 ),
-                style: theme.textTheme.bodyMedium,
+                child: Row(
+                  children: [
+                    Icon(Icons.search, color: theme.iconTheme.color),
+                    const SizedBox(width: 10),
+                    Text(
+                      "Search on ShopEasy...",
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.hintColor),
+                    ),
+                    const Spacer(),
+                    Icon(Icons.mic, color: theme.iconTheme.color),
+                  ],
+                ),
               ),
             ),
           ),
@@ -198,21 +204,9 @@ class _HomePageState extends State<HomePage>
                 slivers: [
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.only(top: 10, left: 12, right: 12, bottom: 6),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.all(Radius.circular(12)),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 6,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: PromoContainer(), // your existing promo widget
-                      ),
+                      padding:
+                      EdgeInsets.only(top: 10, left: 12, right: 12, bottom: 6),
+                      child: PromoContainer(),
                     ),
                   ),
                   const SliverToBoxAdapter(
@@ -221,13 +215,8 @@ class _HomePageState extends State<HomePage>
                       child: DiscountContainer(),
                     ),
                   ),
-                  const SliverToBoxAdapter(
-                    child: Padding(
-                      padding:
-                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      child: CategoryContainer(),
-                    ),
-                  ),
+
+                  // Products Grid
                   SliverPadding(
                     padding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -265,13 +254,7 @@ class _HomePageState extends State<HomePage>
                         }
 
                         final products = ProductsModel.fromJsonList(
-                            snapshot.data!.docs)
-                            .where((p) => _searchQuery.isEmpty
-                            ? true
-                            : p.name
-                            .toLowerCase()
-                            .contains(_searchQuery.toLowerCase()))
-                            .toList();
+                            snapshot.data!.docs);
 
                         return SliverGrid(
                           gridDelegate:
@@ -294,7 +277,8 @@ class _HomePageState extends State<HomePage>
               ),
             ),
           ),
-          // Connectivity Banners
+
+          // Connection banners
           SafeArea(
             bottom: false,
             child: SlideTransition(
@@ -306,14 +290,10 @@ class _HomePageState extends State<HomePage>
                   color: theme.colorScheme.error,
                   child: InkWell(
                     onTap: _autoRefreshData,
-                    splashColor:
-                    Colors.white.withValues(alpha: 51.0),
-                    highlightColor:
-                    Colors.white.withValues(alpha: 25.0),
+                    splashColor: Colors.white.withOpacity(0.2),
                     child: Container(
                       height: 60,
-                      padding:
-                      const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -322,20 +302,8 @@ class _HomePageState extends State<HomePage>
                           Text(
                             "No Internet Connection",
                             style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                          SizedBox(width: 15),
-                          Icon(Icons.refresh,
-                              color: Colors.white, size: 18),
-                          SizedBox(width: 4),
-                          Text(
-                            "Tap to Retry",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w500,
-                            ),
+                                color: Colors.white,
+                                fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -377,7 +345,7 @@ class _HomePageState extends State<HomePage>
   }
 }
 
-/// Jumia-style ProductCard
+/// ProductCard stays the same
 class ProductCard extends StatelessWidget {
   final ProductsModel product;
   const ProductCard({super.key, required this.product});
@@ -385,7 +353,6 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     final discount = product.old_price > 0
         ? ((product.old_price - product.new_price) / product.old_price * 100)
         .round()
@@ -393,7 +360,7 @@ class ProductCard extends StatelessWidget {
 
     return GestureDetector(
       onTap: () {
-        Navigator.pushNamed(context, "/viewProduct", arguments: product);
+        Navigator.pushNamed(context, "/view_product", arguments: product);
       },
       child: Card(
         color: theme.cardColor,
@@ -417,10 +384,10 @@ class ProductCard extends StatelessWidget {
                       width: double.infinity,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Shimmer.fromColors(
-                        baseColor: theme.dividerColor
-                            .withValues(alpha: 0.3 * 255),
-                        highlightColor: theme.dividerColor
-                            .withValues(alpha: 0.1 * 255),
+                        baseColor:
+                        theme.dividerColor.withOpacity(0.3),
+                        highlightColor:
+                        theme.dividerColor.withOpacity(0.1),
                         child: Container(height: 150, color: theme.cardColor),
                       ),
                       errorWidget: (context, url, error) =>
@@ -446,27 +413,6 @@ class ProductCard extends StatelessWidget {
                       ),
                     ),
                   ),
-                Positioned(
-                  bottom: 8,
-                  left: 8,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: product.maxQuantity == 0
-                          ? Colors.grey
-                          : Colors.green.shade600,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      product.maxQuantity == 0
-                          ? 'Out of Stock'
-                          : '${product.maxQuantity} left',
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                ),
               ],
             ),
             Padding(
@@ -507,17 +453,14 @@ class ProductCard extends StatelessWidget {
   }
 }
 
-/// Shimmer ProductCard Placeholder
 class ShimmerProductCard extends StatelessWidget {
   const ShimmerProductCard({super.key});
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Shimmer.fromColors(
-      baseColor: theme.dividerColor.withValues(alpha: 0.3 * 255),
-      highlightColor: theme.dividerColor.withValues(alpha: 0.1 * 255),
+      baseColor: theme.dividerColor.withOpacity(0.3),
+      highlightColor: theme.dividerColor.withOpacity(0.1),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: Container(height: 250, color: theme.cardColor),

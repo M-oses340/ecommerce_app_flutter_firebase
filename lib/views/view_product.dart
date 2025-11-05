@@ -84,7 +84,7 @@ class _ViewProductState extends State<ViewProduct> {
                   Row(
                     children: [
                       Text(
-                        "₹${product.old_price}",
+                        "KSh${product.old_price}",
                         style: TextStyle(
                           fontSize: 16,
                           color: Colors.grey.shade600,
@@ -93,7 +93,7 @@ class _ViewProductState extends State<ViewProduct> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        "₹${product.new_price}",
+                        "KSh${product.new_price}",
                         style: const TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,

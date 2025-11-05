@@ -105,7 +105,7 @@ class CartSummaryBar extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(
-            "Total : ₹${totalCost.toStringAsFixed(2)}",
+            "Total : KSh${totalCost.toStringAsFixed(2)}",
             style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           ElevatedButton(

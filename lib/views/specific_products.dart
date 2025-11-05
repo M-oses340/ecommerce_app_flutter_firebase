@@ -105,7 +105,7 @@ class _SpecificProductsState extends State<SpecificProducts> {
                           Row(
                             children: [
                               Text(
-                                "₹${product.old_price}",
+                                "KSh${product.old_price}",
                                 style: const TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -115,7 +115,7 @@ class _SpecificProductsState extends State<SpecificProducts> {
                               ),
                               const SizedBox(width: 4),
                               Text(
-                                "₹${product.new_price}",
+                                "KSh${product.new_price}",
                                 style: const TextStyle(
                                   fontSize: 15,
                                   fontWeight: FontWeight.bold,

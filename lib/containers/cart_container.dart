@@ -135,7 +135,7 @@ class _CartContainerState extends State<CartContainer> {
                       Row(
                         children: [
                           Text(
-                            "₹${widget.old_price}",
+                            "KSh${widget.old_price}",
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w500,
@@ -144,7 +144,7 @@ class _CartContainerState extends State<CartContainer> {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            "₹${widget.new_price}",
+                            "KSh${widget.new_price}",
                             style: const TextStyle(
                                 fontSize: 18, fontWeight: FontWeight.w600),
                           ),
@@ -199,7 +199,7 @@ class _CartContainerState extends State<CartContainer> {
                 const Text("Total:"),
                 const SizedBox(width: 8),
                 Text(
-                  "₹${widget.new_price * count}",
+                  "KSh${widget.new_price * count}",
                   style: const TextStyle(
                       fontSize: 24, fontWeight: FontWeight.w700),
                 ),
