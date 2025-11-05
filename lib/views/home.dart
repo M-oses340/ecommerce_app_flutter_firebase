@@ -233,7 +233,7 @@ class _HomePageState extends State<HomePage>
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                     sliver: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
-                          .collection("products")
+                          .collection("shop_products")
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState ==
