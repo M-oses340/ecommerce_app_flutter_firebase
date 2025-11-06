@@ -14,6 +14,7 @@ class DbService {
   Future<void> saveUserData({
     required String name,
     required String email,
+    String? photoUrl, // added
   }) async {
     final userId = uid;
     if (userId == null) throw Exception("No user logged in");
@@ -23,14 +24,16 @@ class DbService {
       "email": email,
       "address": "",
       "phone": "",
-      "profileImage": "",
+      "profileImage": photoUrl ?? "", // use Google photo if available
+      "createdAt": FieldValue.serverTimestamp(),
     };
 
     await FirebaseFirestore.instance
         .collection("shop_users")
         .doc(userId)
-        .set(data);
+        .set(data, SetOptions(merge: true)); // merge = safe for existing users
   }
+
 
   Future<void> updateUserData({required Map<String, dynamic> extraData}) async {
     final userId = uid;

@@ -1,60 +1,82 @@
 import 'package:ecommerce_app/controllers/db_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
-  // Create account
+  // 🟢 Create account with email + password
   Future<String> createAccountWithEmail(String name, String email, String password) async {
     try {
       debugPrint("🟩 [AuthService] Creating account for $email");
-      await FirebaseAuth.instance.createUserWithEmailAndPassword(
+
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: email,
         password: password,
       );
-      await DbService().saveUserData(name: name, email: email);
+      final user = userCredential.user;
+
+      // Save to Firestore
+      await DbService().saveUserData(
+        name: name,
+        email: email,
+        photoUrl: user?.photoURL,
+      );
+
+      // Send verification email
+      if (user != null && !user.emailVerified) {
+        await user.sendEmailVerification();
+        debugPrint("📨 [AuthService] Verification email sent to $email");
+      }
+
       debugPrint("✅ [AuthService] Account created for $email");
-      return "Account Created";
+      return "Account Created — Verify your email";
     } on FirebaseAuthException catch (e) {
       debugPrint("❌ [AuthService] createAccount error: ${e.code} - ${e.message}");
       return e.message.toString();
+    } catch (e) {
+      debugPrint("⚠️ [AuthService] Unexpected createAccount error: $e");
+      return "An unexpected error occurred.";
     }
   }
 
-  // Login
+  // 🟦 Login with email + password
   Future<String> loginWithEmail(String email, String password) async {
     try {
-      debugPrint("🔹 [AuthService] Attempting login for $email");
-      await FirebaseAuth.instance.signInWithEmailAndPassword(email: email, password: password);
-      debugPrint("✅ [AuthService] Login successful");
+      debugPrint("🟦 [AuthService] Logging in user: $email");
+
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = credential.user;
+      if (user == null) return "Login failed. Please try again.";
+
+      if (!user.emailVerified) {
+        debugPrint("🚫 [AuthService] Email not verified for $email");
+        await user.sendEmailVerification();
+        debugPrint("📧 [AuthService] Verification email re-sent to $email");
+        await FirebaseAuth.instance.signOut();
+        return "Email not verified. A new verification link has been sent.";
+      }
+
+      debugPrint("✅ [AuthService] Login successful for $email");
       return "Login Successful";
     } on FirebaseAuthException catch (e) {
       debugPrint("❌ [AuthService] login error: ${e.code} - ${e.message}");
-      if (e.code == "wrong-password" ||
-          e.message?.contains("incorrect") == true ||
-          e.message?.contains("malformed") == true ||
-          e.message?.contains("expired") == true) {
-        return "Incorrect email or password.";
-      } else if (e.code == "user-not-found") {
-        return "No account found with this email.";
-      } else if (e.code == "network-request-failed") {
-        return "Network error. Check your connection.";
-      } else if (e.code == "internal-error") {
-        return "Internal error occurred. Try again later.";
-      } else {
-        return "Login failed. Please try again.";
-      }
+      return e.message.toString();
     } catch (e) {
-      debugPrint("⚠️ [AuthService] login unknown error: $e");
-      return "Unexpected error. Check your internet connection.";
+      debugPrint("❌ [AuthService] login unknown error: $e");
+      return "An unexpected error occurred.";
     }
   }
 
-  // Logout
+  // 🟨 Logout
   Future logout() async {
     await FirebaseAuth.instance.signOut();
   }
 
-  // Reset password
+  // 🟧 Reset password
   Future resetPassword(String email) async {
     try {
       await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
@@ -65,68 +87,81 @@ class AuthService {
     }
   }
 
-  // Check login
+  // 🟩 Check if logged in
   Future<bool> isLoggedIn() async {
     var user = FirebaseAuth.instance.currentUser;
     return user != null;
   }
 
+  // 🟦 Update email
   Future<String> updateEmail({
     required String newEmail,
     required String currentPassword,
   }) async {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      print("❌ [AuthService] No signed-in user found");
-      return "no-user";
-    }
+    if (user == null) return "no-user";
 
     try {
-      print("🟦 [AuthService] Starting password verification...");
-      print("   ┣━ Current email: ${user.email}");
-      print("   ┣━ Provided password: $currentPassword");
-      print("   ┗━ Intended new email: $newEmail");
-
-      // Step 1: Build credentials for reauthentication
       final credential = EmailAuthProvider.credential(
         email: user.email!,
         password: currentPassword,
       );
+      await user.reauthenticateWithCredential(credential);
 
-      print("🟣 [AuthService] Attempting reauthenticateWithCredential...");
-      final result = await user.reauthenticateWithCredential(credential);
-      print("🟢 [AuthService] Reauthenticate result: ${result.credential?.providerId}");
-
-      // Step 2: Only update email if changed
       if (user.email != newEmail) {
-        print("🟢 [AuthService] Proceeding to update email...");
         await user.updateEmail(newEmail);
         await user.sendEmailVerification();
         await DbService().updateUserData(extraData: {"email": newEmail});
-        print("✅ [AuthService] Email updated successfully!");
-      } else {
-        print("ℹ️ [AuthService] Email unchanged — skipping update.");
       }
 
       return "success";
-    } on FirebaseAuthException catch (e, st) {
-      print("❌ [AuthService] FirebaseAuthException caught!");
-      print("   ┣━ Code: ${e.code}");
-      print("   ┣━ Message: ${e.message}");
-      print("   ┗━ StackTrace: $st");
+    } on FirebaseAuthException catch (e) {
       if (e.code == "wrong-password") return "wrong-password";
       if (e.code == "invalid-credential") return "invalid-credential";
       if (e.code == "user-not-found") return "user-not-found";
       if (e.code == "email-already-in-use") return "email-already-in-use";
       if (e.code == "requires-recent-login") return "requires-recent-login";
       return "unknown";
-    } catch (e, st) {
-      print("❌ [AuthService] Non-Firebase Exception: $e");
-      if (kDebugMode) {
-        print("   ┗━ StackTrace: $st");
-      }
+    } catch (_) {
       return "unknown";
     }
   }
 
+  // 🟢 Sign in with Google
+  Future<String> signInWithGoogle() async {
+    try {
+      debugPrint("🟢 [AuthService] Starting Google sign-in...");
+
+      final GoogleSignInAccount? googleUser = await GoogleSignIn().signIn();
+      if (googleUser == null) return "cancelled";
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final user = userCredential.user;
+
+      if (user != null) {
+        await DbService().saveUserData(
+          name: user.displayName ?? "User",
+          email: user.email ?? "No Email",
+          photoUrl: user.photoURL,
+        );
+
+        debugPrint("✅ [AuthService] Google sign-in successful: ${user.email}");
+        return "Login Successful";
+      } else {
+        return "Login failed. Please try again.";
+      }
+    } on FirebaseAuthException catch (e) {
+      debugPrint("❌ [AuthService] Google sign-in Firebase error: ${e.code} - ${e.message}");
+      return "Google sign-in failed. ${e.message}";
+    } catch (e) {
+      debugPrint("❌ [AuthService] Google sign-in unexpected error: $e");
+      return "Google sign-in failed. Please try again.";
+    }
+  }
 }

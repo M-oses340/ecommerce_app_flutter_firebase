@@ -28,6 +28,11 @@ dependencies:
   firebase_storage: ^11.6.5
   gap: ^3.0.1
   connectivity_plus: ^6.0.3
+  shared_preferences: ^2.3.2
+  google_sign_in: ^6.2.1
+  font_awesome_flutter: ^10.7.0
+
+
 
 dev_dependencies:
   flutter_test:
@@ -43,6 +48,7 @@ flutter:
     - assets/images/logo.png
     - assets/images/logo_dark.png
     - assets/images/default_avatar.png
+    - assets/images/google_logo.png
 
 flutter_native_splash:
   color: "#2196F3"  # Blue background for light mode

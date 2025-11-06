@@ -97,20 +97,21 @@ class _SignupPageState extends State<SignupPage>
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result == "Account Created") {
-      if (!mounted) return;
+    if (result.contains("Verify your email")) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("✅ Account Created Successfully")),
+        const SnackBar(
+          content: Text("✅ Account created! Check your email to verify."),
+        ),
       );
-      await Future.delayed(const Duration(seconds: 1));
-      if (mounted) Navigator.pushReplacementNamed(context, "/home");
+      await Future.delayed(const Duration(seconds: 2));
+      if (mounted) Navigator.pushReplacementNamed(context, "/login");
     } else {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(result)),
       );
     }
   }
+
 
   InputDecoration _inputDecoration(String label, IconData icon, {Widget? suffix}) {
     final colorScheme = Theme.of(context).colorScheme;
