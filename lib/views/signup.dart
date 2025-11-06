@@ -31,8 +31,8 @@ class _SignupPageState extends State<SignupPage>
   void initState() {
     super.initState();
 
-    _controller =
-        AnimationController(vsync: this, duration: const Duration(milliseconds: 1200));
+    _controller = AnimationController(
+        vsync: this, duration: const Duration(milliseconds: 1200));
 
     _shakeController = AnimationController(
       vsync: this,
@@ -85,7 +85,6 @@ class _SignupPageState extends State<SignupPage>
     }
 
     setState(() => _isLoading = true);
-
     await Future.delayed(const Duration(milliseconds: 200));
 
     final result = await AuthService().createAccountWithEmail(
@@ -112,6 +111,20 @@ class _SignupPageState extends State<SignupPage>
     }
   }
 
+  Future<void> _handleGoogleSignup() async {
+    setState(() => _isLoading = true);
+    final result = await AuthService().signInWithGoogle();
+    setState(() => _isLoading = false);
+
+    if (result == "Success") {
+      if (!mounted) return;
+      Navigator.pushReplacementNamed(context, "/home");
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result)),
+      );
+    }
+  }
 
   InputDecoration _inputDecoration(String label, IconData icon, {Widget? suffix}) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -306,9 +319,35 @@ class _SignupPageState extends State<SignupPage>
 
                       const SizedBox(height: 16),
 
+                      // Google Sign-Up Button
+                      ElevatedButton.icon(
+                        onPressed: _isLoading ? null : _handleGoogleSignup,
+                        icon: Image.asset(
+                          "assets/images/google_logo.png",
+                          height: 24,
+                          width: 24,
+                        ),
+                        label: const Text(
+                          "Sign up with Google",
+                          style: TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          minimumSize: const Size(double.infinity, 54),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                            side: const BorderSide(color: Colors.grey),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
                       TextButton(
-                        onPressed:
-                        _isLoading ? null : () => Navigator.pushNamed(context, "/login"),
+                        onPressed: _isLoading
+                            ? null
+                            : () => Navigator.pushNamed(context, "/login"),
                         child: Text(
                           "Already have an account? Log in",
                           style: TextStyle(color: colorScheme.primary),

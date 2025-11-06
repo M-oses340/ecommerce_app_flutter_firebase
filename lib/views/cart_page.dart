@@ -13,11 +13,11 @@ class CartPage extends StatefulWidget {
 class _CartPageState extends State<CartPage>
     with AutomaticKeepAliveClientMixin {
   @override
-  bool get wantKeepAlive => true; // Keeps scroll and UI state alive
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required when using keep-alive mixin
+    super.build(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -40,15 +40,19 @@ class _CartPageState extends State<CartPage>
             return const Center(child: Text("No items in cart"));
           }
 
-          // ✅ Uses your existing refreshCart() method
           return RefreshIndicator(
             onRefresh: () async => await value.refreshCart(),
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
               itemCount: value.carts.length,
               itemBuilder: (context, index) {
-                final product = value.products[index];
                 final cartItem = value.carts[index];
+
+                // ✅ Find the matching product by ID
+                final product = value.products.firstWhere(
+                      (p) => p.id == cartItem.productId,
+                  orElse: () => value.products.first,
+                );
 
                 return CartContainer(
                   image: product.image,
@@ -72,7 +76,6 @@ class _CartPageState extends State<CartPage>
             return const SizedBox();
           }
 
-          // ✅ Convert int → double to match CartSummaryBar
           return CartSummaryBar(totalCost: value.totalCost.toDouble());
         },
       ),
@@ -80,7 +83,7 @@ class _CartPageState extends State<CartPage>
   }
 }
 
-// ✅ Clean, reusable bottom summary bar widget
+// ✅ Reusable Bottom Summary Bar
 class CartSummaryBar extends StatelessWidget {
   final double totalCost;
   const CartSummaryBar({super.key, required this.totalCost});
