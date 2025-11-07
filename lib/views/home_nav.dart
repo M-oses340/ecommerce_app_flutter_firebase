@@ -4,7 +4,7 @@ import 'package:ecommerce_app/views/cart_page.dart';
 import 'package:ecommerce_app/views/home.dart';
 import 'package:ecommerce_app/views/orders_page.dart';
 import 'package:ecommerce_app/views/profile.dart';
-import 'package:ecommerce_app/views/categories_page.dart'; // ✅ Add this import
+import 'package:ecommerce_app/views/categories_page.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -20,14 +20,15 @@ class HomeNav extends StatefulWidget {
 class _HomeNavState extends State<HomeNav> {
   int selectedIndex = 0;
 
-  // ✅ Now includes 5 pages: Home, Categories, Orders, Cart, Profile
+  // ✅ 5 pages: Home, Categories, Orders, Cart, Profile
   final List<Widget?> _pages = [const HomePage(), null, null, null, null];
 
   Widget _getPage(int index) {
     if (_pages[index] == null) {
       switch (index) {
         case 1:
-          _pages[index] = const CategoriesPage(); // ✅ Added
+        // ✅ Pass a default or general category name
+          _pages[index] = const CategoriesPage(categoryName: 'All');
           break;
         case 2:
           _pages[index] = const OrdersPage();
@@ -45,6 +46,8 @@ class _HomeNavState extends State<HomeNav> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return ConnectivityWrapper(
       child: Scaffold(
         body: IndexedStack(
@@ -53,12 +56,14 @@ class _HomeNavState extends State<HomeNav> {
         ),
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
+          backgroundColor: theme.scaffoldBackgroundColor,
           elevation: 8,
           currentIndex: selectedIndex,
           onTap: (value) => setState(() => selectedIndex = value),
-          selectedItemColor: Colors.blue,
-          unselectedItemColor: Colors.grey.shade400,
+          selectedItemColor:
+          theme.brightness == Brightness.dark ? Colors.blue[300] : Colors.blue,
+          unselectedItemColor:
+          theme.brightness == Brightness.dark ? Colors.grey[500] : Colors.grey.shade400,
           showSelectedLabels: true,
           showUnselectedLabels: true,
           items: [
@@ -126,5 +131,4 @@ class _HomeNavState extends State<HomeNav> {
       ),
     );
   }
-
 }

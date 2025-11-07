@@ -24,6 +24,7 @@ import 'package:shimmer/shimmer.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:ecommerce_app/providers/connectivity_provider.dart';
 import 'models/orders_model.dart';
+import 'models/products_model.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 
@@ -95,11 +96,9 @@ class _MyAppState extends State<MyApp> {
           ),
           useMaterial3: true,
         ),
-        home: Stack(
-          children: const [
-            SplashTransition(),
-          ],
-        ),
+        home: const SplashTransition(),
+
+        // ✅ Fixed routes
         routes: {
           "/login": (context) => const LoginPage(),
           "/home": (context) => const HomeNav(),
@@ -107,7 +106,6 @@ class _MyAppState extends State<MyApp> {
           "/update_profile": (context) => const UpdateProfile(),
           "/discount": (context) => const DiscountPage(),
           "/specific": (context) => const SpecificProducts(),
-          "/view_product": (context) => const ViewProduct(),
           "/cart": (context) => const CartPage(),
           "/checkout": (context) => const CheckoutPage(),
           '/search': (_) => const SearchView(),
@@ -117,6 +115,17 @@ class _MyAppState extends State<MyApp> {
                 ModalRoute.of(context)!.settings.arguments as OrdersModel;
             return ViewOrder(order: order);
           },
+        },
+
+        // ✅ Properly handle view_product route with product argument
+        onGenerateRoute: (settings) {
+          if (settings.name == '/view_product') {
+            final product = settings.arguments as ProductsModel;
+            return MaterialPageRoute(
+              builder: (_) => ViewProduct(product: product),
+            );
+          }
+          return null;
         },
       ),
     );

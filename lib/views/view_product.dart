@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 class ViewProduct extends StatefulWidget {
-  const ViewProduct({super.key});
+  final ProductsModel product; // ✅ Added required field
+
+  const ViewProduct({super.key, required this.product}); // ✅ Constructor
 
   @override
   State<ViewProduct> createState() => _ViewProductState();
@@ -16,13 +18,16 @@ class ViewProduct extends StatefulWidget {
 class _ViewProductState extends State<ViewProduct> {
   @override
   Widget build(BuildContext context) {
-    final product = ModalRoute.of(context)!.settings.arguments as ProductsModel;
+    final product = widget.product; // ✅ Use widget.product
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Product Details"),
+        title: Text(product.name),
+        backgroundColor: theme.scaffoldBackgroundColor,
         scrolledUnderElevation: 0,
-        forceMaterialTransparency: true,
+        foregroundColor: theme.textTheme.bodyLarge?.color,
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -33,14 +38,15 @@ class _ViewProductState extends State<ViewProduct> {
               child: Container(
                 margin: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: isDark ? Colors.grey.shade900 : Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
-                    BoxShadow(
-                      blurRadius: 6,
-                      color: Colors.black.withValues(alpha: 0.05),
-                      offset: const Offset(0, 4),
-                    ),
+                    if (!isDark)
+                      BoxShadow(
+                        blurRadius: 6,
+                        color: Colors.black.withValues(alpha: 0.05),
+                        offset: const Offset(0, 4),
+                      ),
                   ],
                 ),
                 child: ClipRRect(
@@ -75,9 +81,10 @@ class _ViewProductState extends State<ViewProduct> {
                     product.name,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
+                      color: theme.textTheme.bodyLarge?.color,
                     ),
                   ),
                   const SizedBox(height: 10),
@@ -130,7 +137,7 @@ class _ViewProductState extends State<ViewProduct> {
                     product.description,
                     style: TextStyle(
                       fontSize: 15,
-                      color: Colors.grey.shade700,
+                      color: isDark ? Colors.white70 : Colors.grey.shade700,
                     ),
                   ),
                 ],
