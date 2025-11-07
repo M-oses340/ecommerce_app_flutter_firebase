@@ -21,10 +21,11 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:connectivity_plus/connectivity_plus.dart'; // 🟢 Added
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:ecommerce_app/providers/connectivity_provider.dart';
 import 'models/orders_model.dart';
-
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,105 +57,73 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  bool _isConnected = true; // 🟢 Added
-  final Connectivity _connectivity = Connectivity(); // 🟢 Added
+  final Connectivity _connectivity = Connectivity();
 
   @override
   void initState() {
     super.initState();
-    _monitorConnection(); // 🟢 Added
+    _monitorConnection();
   }
 
-  // 🟢 Updated for connectivity_plus >=6.0.0
   void _monitorConnection() {
-    _connectivity.onConnectivityChanged.listen((List<ConnectivityResult> results) {
-      final hasConnection = results.isNotEmpty &&
-          results.any((result) => result != ConnectivityResult.none);
-      setState(() {
-        _isConnected = hasConnection;
-      });
+    _connectivity.onConnectivityChanged.listen((results) {
+      // You can update a global provider if needed
     });
   }
-
-  void _retryConnection() async {
-    final results = await _connectivity.checkConnectivity();
-    final hasConnection = results.isNotEmpty &&
-        results.any((result) => result != ConnectivityResult.none);
-    setState(() {
-      _isConnected = hasConnection;
-    });
-  }
-
 
   @override
   Widget build(BuildContext context) {
-    // 🟠 Modified: Wrap MaterialApp with connection handling
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => UserProvider()),
         ChangeNotifierProvider(create: (_) => CartProvider()),
-        ChangeNotifierProvider(create: (_) => ConnectivityProvider()), // 🟢 Added
+        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
       ],
-      child: Consumer<ConnectivityProvider>(
-        builder: (context, connectivity, _) {
-          return MaterialApp(
-            title: 'eCommerce App',
-            debugShowCheckedModeBanner: false,
-            themeMode: ThemeMode.system,
-            theme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-              useMaterial3: true,
-              brightness: Brightness.light,
-            ),
-            darkTheme: ThemeData(
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.blue,
-                brightness: Brightness.dark,
-              ),
-              useMaterial3: true,
-            ),
-            home: Consumer<ConnectivityProvider>(
-              builder: (context, connectivity, child) {
-                return Stack(
-                  children: [
-                    const SplashTransition(),
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 400),
-                      child: connectivity.isOnline ? const SizedBox() : const NoInternetOverlay(),
-                    ),
-                  ],
-                );
-              },
-            ),
-
-
-            routes: {
-              "/login": (context) => const LoginPage(),
-              "/home": (context) => const HomeNav(),
-              "/signup": (context) => const SignupPage(),
-              "/update_profile": (context) => const UpdateProfile(),
-              "/discount": (context) => const DiscountPage(),
-              "/specific": (context) => const SpecificProducts(),
-              "/view_product": (context) => const ViewProduct(),
-              "/cart": (context) => const CartPage(),
-              "/checkout": (context) => const CheckoutPage(),
-              '/search': (_) => const SearchView(),
-              "/orders": (context) => const OrdersPage(),
-              "/view_order": (context) {
-                final order =
+      child: MaterialApp(
+        title: 'eCommerce App',
+        debugShowCheckedModeBanner: false,
+        themeMode: ThemeMode.system,
+        theme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          useMaterial3: true,
+          brightness: Brightness.light,
+        ),
+        darkTheme: ThemeData(
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.blue,
+            brightness: Brightness.dark,
+          ),
+          useMaterial3: true,
+        ),
+        home: Stack(
+          children: const [
+            SplashTransition(),
+          ],
+        ),
+        routes: {
+          "/login": (context) => const LoginPage(),
+          "/home": (context) => const HomeNav(),
+          "/signup": (context) => const SignupPage(),
+          "/update_profile": (context) => const UpdateProfile(),
+          "/discount": (context) => const DiscountPage(),
+          "/specific": (context) => const SpecificProducts(),
+          "/view_product": (context) => const ViewProduct(),
+          "/cart": (context) => const CartPage(),
+          "/checkout": (context) => const CheckoutPage(),
+          '/search': (_) => const SearchView(),
+          "/orders": (context) => const OrdersPage(),
+          "/view_order": (context) {
+            final order =
                 ModalRoute.of(context)!.settings.arguments as OrdersModel;
-                return ViewOrder(order: order);
-              },
-            },
-          );
+            return ViewOrder(order: order);
+          },
         },
       ),
     );
-
   }
 }
 
-/// Splash screen with logo + shimmer title
+/// Splash screen
 class SplashTransition extends StatefulWidget {
   const SplashTransition({super.key});
 
@@ -203,12 +172,7 @@ class _SplashTransitionState extends State<SplashTransition>
     _logoController.forward();
     _spinnerController.repeat(reverse: true);
 
-    Future.delayed(const Duration(milliseconds: 2800), () async {
-      await Future.wait([
-        _fadeController.reverse(),
-        _logoController.reverse(),
-      ]);
-
+    Future.delayed(const Duration(milliseconds: 2800), () {
       if (!mounted) return;
 
       Navigator.pushReplacement(
@@ -216,9 +180,9 @@ class _SplashTransitionState extends State<SplashTransition>
         PageRouteBuilder(
           pageBuilder: (_, __, ___) => const CheckUser(),
           transitionDuration: const Duration(milliseconds: 900),
-          transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          transitionsBuilder: (context, animation, _, child) {
             final fade =
-            CurvedAnimation(parent: animation, curve: Curves.easeInOut);
+                CurvedAnimation(parent: animation, curve: Curves.easeInOut);
             final scale = Tween<double>(begin: 0.95, end: 1.0).animate(fade);
             return FadeTransition(
               opacity: fade,
@@ -245,13 +209,13 @@ class _SplashTransitionState extends State<SplashTransition>
     final double logoSize = size.width * 0.35;
 
     final backgroundColor =
-    isDark ? const Color(0xFF0A192F) : const Color(0xFF2196F3);
+        isDark ? const Color(0xFF0A192F) : const Color(0xFF2196F3);
     final spinnerColor = isDark ? Colors.blueAccent.shade100 : Colors.white;
     final textColor = isDark ? Colors.white70 : Colors.white;
     final shimmerBase = isDark ? Colors.white54 : Colors.white70;
     final shimmerHighlight = isDark ? Colors.white : Colors.blue[50];
     final logoAsset =
-    isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo.png';
+        isDark ? 'assets/images/logo_dark.png' : 'assets/images/logo.png';
 
     return FadeTransition(
       opacity: _fadeController,
@@ -305,7 +269,7 @@ class _SplashTransitionState extends State<SplashTransition>
   }
 }
 
-/// Check login and route user
+/// Check user login and biometric
 class CheckUser extends StatefulWidget {
   const CheckUser({super.key});
 
@@ -314,42 +278,53 @@ class CheckUser extends StatefulWidget {
 }
 
 class _CheckUserState extends State<CheckUser> {
+  final FlutterSecureStorage storage = const FlutterSecureStorage();
+  final LocalAuthentication auth = LocalAuthentication();
+
   @override
   void initState() {
     super.initState();
-    _checkLoginStatus();
+    _checkBiometricLogin();
   }
 
-  Future<void> _checkLoginStatus() async {
+  Future<void> _checkBiometricLogin() async {
     await Future.delayed(const Duration(milliseconds: 400));
-    final isLoggedIn = await AuthService().isLoggedIn();
+
+    final storedLogin = await storage.read(key: "logged_in");
+
+    if (storedLogin == "true") {
+      final canCheck = await auth.canCheckBiometrics;
+      final isSupported = await auth.isDeviceSupported();
+
+      if (canCheck && isSupported) {
+        try {
+          final authenticated = await auth.authenticate(
+            localizedReason: "Use Fingerprint / Face ID to continue",
+          );
+          if (authenticated && mounted) {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (_) => const HomeNav()),
+            );
+            return;
+          }
+        } catch (_) {}
+      }
+    }
 
     if (!mounted) return;
-
-    Navigator.of(context).pushReplacement(
-      PageRouteBuilder(
-        pageBuilder: (_, __, ___) =>
-        isLoggedIn ? const HomeNav() : const LoginPage(),
-        transitionsBuilder: (_, animation, __, child) => FadeTransition(
-          opacity: CurvedAnimation(parent: animation, curve: Curves.easeInOut),
-          child: child,
-        ),
-        transitionDuration: const Duration(milliseconds: 700),
-      ),
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Scaffold(
-      backgroundColor: isDark ? const Color(0xFF0A192F) : Colors.white,
+    return const Scaffold(
+      backgroundColor: Colors.transparent,
       body: Center(
-        child: CircularProgressIndicator(
-          strokeWidth: 2.8,
-          valueColor: AlwaysStoppedAnimation<Color>(
-              isDark ? Colors.blueAccent.shade100 : Colors.blue),
-        ),
+        child: CircularProgressIndicator(),
       ),
     );
   }

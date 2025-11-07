@@ -3,6 +3,8 @@ import 'package:ecommerce_app/providers/cart_provider.dart';
 import 'package:ecommerce_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -17,6 +19,8 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   late final Animation<double> _scaleAnimation;
   late final AnimationController _pageFadeController;
   late final Animation<double> _pageFadeAnimation;
+  final FlutterSecureStorage storage = const FlutterSecureStorage();
+
 
   @override
   void initState() {
@@ -55,6 +59,7 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   Future<void> _logout(BuildContext context) async {
     final userProvider = Provider.of<UserProvider>(context, listen: false);
     final cartProvider = Provider.of<CartProvider>(context, listen: false);
+    final FlutterSecureStorage storage = const FlutterSecureStorage(); // ✅ Added
 
     final confirm = await showDialog<bool>(
       context: context,
@@ -77,15 +82,23 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
 
     if (confirm == true) {
       await _pageFadeController.forward();
+
+      // ✅ Clear providers
       userProvider.cancelProvider();
       cartProvider.cancelProvider();
+
+      // ✅ Clear Firebase session
       await AuthService().logout();
+
+      // ✅ Clear biometric login session
+      await storage.delete(key: "logged_in");
 
       if (context.mounted) {
         Navigator.pushNamedAndRemoveUntil(context, "/login", (_) => false);
       }
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
