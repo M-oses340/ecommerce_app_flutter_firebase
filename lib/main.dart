@@ -15,6 +15,8 @@ import 'package:ecommerce_app/views/specific_products.dart';
 import 'package:ecommerce_app/views/update_profile.dart';
 import 'package:ecommerce_app/views/view_product.dart';
 import 'package:ecommerce_app/widgets/no_internet_overlay.dart';
+import 'package:ecommerce_app/views/wallet_page.dart';
+import 'package:ecommerce_app/views/wallet_deposit_page.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -68,7 +70,7 @@ class _MyAppState extends State<MyApp> {
 
   void _monitorConnection() {
     _connectivity.onConnectivityChanged.listen((results) {
-      // You can update a global provider if needed
+      // Optional: update a global provider if needed
     });
   }
 
@@ -98,7 +100,7 @@ class _MyAppState extends State<MyApp> {
         ),
         home: const SplashTransition(),
 
-        // ✅ Fixed routes
+        // ✅ Routes section
         routes: {
           "/login": (context) => const LoginPage(),
           "/home": (context) => const HomeNav(),
@@ -115,9 +117,13 @@ class _MyAppState extends State<MyApp> {
                 ModalRoute.of(context)!.settings.arguments as OrdersModel;
             return ViewOrder(order: order);
           },
+
+          // 🟢 Wallet Routes Added
+          "/wallet": (context) => const WalletPage(),
+          "/wallet_deposit": (context) => const WalletDepositPage(),
         },
 
-        // ✅ Properly handle view_product route with product argument
+        // ✅ Handle product view route dynamically
         onGenerateRoute: (settings) {
           if (settings.name == '/view_product') {
             final product = settings.arguments as ProductsModel;
@@ -132,7 +138,7 @@ class _MyAppState extends State<MyApp> {
   }
 }
 
-/// Splash screen
+/// Splash screen transition
 class SplashTransition extends StatefulWidget {
   const SplashTransition({super.key});
 
@@ -278,7 +284,7 @@ class _SplashTransitionState extends State<SplashTransition>
   }
 }
 
-/// Check user login and biometric
+/// Check user login and biometric auth
 class CheckUser extends StatefulWidget {
   const CheckUser({super.key});
 

@@ -261,5 +261,69 @@ class DbService {
       }
     }
   }
+  // ============================
+  // 🔹 WALLET
+  // ============================
+
+  /// Stream the current wallet balance in real-time
+  Stream<DocumentSnapshot> walletStream() {
+    final userId = uid;
+    if (userId == null) return const Stream.empty();
+    return FirebaseFirestore.instance
+        .collection("wallets")
+        .doc(userId)
+        .snapshots();
+  }
+
+  /// Create or update wallet document
+  Future<void> updateWalletBalance(double newBalance) async {
+    final userId = uid;
+    if (userId == null) throw Exception("No user logged in");
+
+    final walletRef =
+    FirebaseFirestore.instance.collection("wallets").doc(userId);
+
+    await walletRef.set({
+      "balance": newBalance,
+      "updatedAt": FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
+
+  /// Add a transaction record
+  Future<void> addWalletTransaction({
+    required String type, // deposit, purchase, etc.
+    required double amount,
+    required String description,
+  }) async {
+    final userId = uid;
+    if (userId == null) throw Exception("No user logged in");
+
+    final txRef = FirebaseFirestore.instance
+        .collection("wallets")
+        .doc(userId)
+        .collection("transactions")
+        .doc();
+
+    await txRef.set({
+      "type": type,
+      "amount": amount,
+      "description": description,
+      "createdAt": FieldValue.serverTimestamp(),
+    });
+  }
+
+  /// Fetch current balance
+  Future<double> getCurrentBalance() async {
+    final userId = uid;
+    if (userId == null) return 0.0;
+
+    final doc = await FirebaseFirestore.instance
+        .collection("wallets")
+        .doc(userId)
+        .get();
+
+    return (doc.data()?["balance"] ?? 0).toDouble();
+  }
+
 
 }

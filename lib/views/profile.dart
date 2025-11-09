@@ -1,10 +1,10 @@
 import 'package:ecommerce_app/controllers/auth_service.dart';
+import 'package:ecommerce_app/controllers/wallet_controller.dart'; // ✅ Added for wallet stream
 import 'package:ecommerce_app/providers/cart_provider.dart';
 import 'package:ecommerce_app/providers/user_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -20,7 +20,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
   late final AnimationController _pageFadeController;
   late final Animation<double> _pageFadeAnimation;
   final FlutterSecureStorage storage = const FlutterSecureStorage();
-
 
   @override
   void initState() {
@@ -99,7 +98,6 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -109,11 +107,15 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
     final List<Map<String, dynamic>> options = [
       {"icon": Icons.local_shipping_outlined, "text": "Orders", "onTap": () => Navigator.pushNamed(context, "/orders")},
       {"icon": Icons.discount_outlined, "text": "Discount & Offers", "onTap": () => Navigator.pushNamed(context, "/discount")},
-      {"icon": Icons.support_agent, "text": "Help & Support", "onTap": () {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Mail us at ecommerce@shop.com"), behavior: SnackBarBehavior.floating),
-        );
-      }},
+      {
+        "icon": Icons.support_agent,
+        "text": "Help & Support",
+        "onTap": () {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Mail us at ecommerce@shop.com"), behavior: SnackBarBehavior.floating),
+          );
+        }
+      },
       {"icon": Icons.logout_outlined, "text": "Logout", "onTap": () => _logout(context), "color": Colors.redAccent},
     ];
 
@@ -125,6 +127,69 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
           scrolledUnderElevation: 0,
           backgroundColor: colorScheme.surface,
           foregroundColor: colorScheme.onSurface,
+
+          // ✅ Wallet Icon with Live Balance Badge
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: StreamBuilder(
+                stream: WalletController().walletStream,
+                builder: (context, snapshot) {
+                  double balance = 0.0;
+                  if (snapshot.hasData && snapshot.data!.data() != null) {
+                    balance = (snapshot.data!.data()?['wallet_balance'] ?? 0.0).toDouble();
+                  }
+
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(50),
+                    onTap: () => Navigator.pushNamed(context, '/wallet'),
+                    child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.symmetric(horizontal: 10),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: colorScheme.surfaceVariant.withOpacity(0.3),
+                          ),
+                          child: Icon(
+                            Icons.account_balance_wallet_outlined,
+                            color: colorScheme.primary,
+                            size: 26,
+                          ),
+                        ),
+
+                        // 🔹 Balance badge
+                        if (balance > 0)
+                          Positioned(
+                            right: -4,
+                            top: -4,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primary,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                balance >= 1000
+                                    ? 'Ksh ${(balance / 1000).toStringAsFixed(1)}k'
+                                    : 'Ksh ${balance.toInt()}',
+                                style: TextStyle(
+                                  color: colorScheme.onPrimary,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
@@ -150,18 +215,31 @@ class _ProfilePageState extends State<ProfilePage> with TickerProviderStateMixin
                                 radius: 35,
                                 backgroundColor: Colors.grey.shade300,
                                 backgroundImage: user.profileImage.isNotEmpty ? NetworkImage(user.profileImage) : null,
-                                child: user.profileImage.isEmpty ? const Icon(Icons.person, size: 40, color: Colors.white70) : null,
+                                child: user.profileImage.isEmpty
+                                    ? const Icon(Icons.person, size: 40, color: Colors.white70)
+                                    : null,
                               ),
                               const SizedBox(width: 16),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(user.name.isNotEmpty ? user.name : "Guest User",
-                                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: colorScheme.onSurface)),
+                                    Text(
+                                      user.name.isNotEmpty ? user.name : "Guest User",
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        fontWeight: FontWeight.w600,
+                                        color: colorScheme.onSurface,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
-                                    Text(user.email.isNotEmpty ? user.email : "No email",
-                                        style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 14)),
+                                    Text(
+                                      user.email.isNotEmpty ? user.email : "No email",
+                                      style: TextStyle(
+                                        color: colorScheme.onSurfaceVariant,
+                                        fontSize: 14,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -245,8 +323,10 @@ class _AnimatedOptionTileState extends State<AnimatedOptionTile> with SingleTick
     super.initState();
     _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 400));
 
-    _fadeAnimation = Tween<double>(begin: 0, end: 1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
-    _scaleAnimation = Tween<double>(begin: 0.95, end: 1).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+    _fadeAnimation = Tween<double>(begin: 0, end: 1)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _scaleAnimation = Tween<double>(begin: 0.95, end: 1)
+        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
 
     Future.delayed(widget.delay, () => _controller.forward());
   }
@@ -267,7 +347,13 @@ class _AnimatedOptionTileState extends State<AnimatedOptionTile> with SingleTick
           children: [
             ListTile(
               leading: Icon(widget.icon, color: widget.color ?? widget.colorScheme.onSurface),
-              title: Text(widget.text, style: TextStyle(color: widget.color ?? widget.colorScheme.onSurface, fontWeight: FontWeight.w500)),
+              title: Text(
+                widget.text,
+                style: TextStyle(
+                  color: widget.color ?? widget.colorScheme.onSurface,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
               onTap: widget.onTap,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
               hoverColor: widget.colorScheme.surfaceVariant.withOpacity(0.3),
