@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:ui';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:ecommerce_app/models/products_model.dart';
 import 'package:ecommerce_app/views/view_product.dart';
@@ -16,11 +19,42 @@ class CategoriesPage extends StatefulWidget {
 class _CategoriesPageState extends State<CategoriesPage> {
   String searchQuery = "";
   late String currentCategory;
+  final ScrollController _scrollController = ScrollController();
+
+  // Values driven by scroll to animate the blur/tint
+  double _blurSigma = 0.0;
+  double _overlayOpacity = 0.0;
 
   @override
   void initState() {
     super.initState();
     currentCategory = widget.categoryName;
+
+    // Listen to scroll to control blur/tint on category bar
+    _scrollController.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final offset = _scrollController.hasClients ? _scrollController.offset : 0.0;
+
+    // Adjust these divisors to tune the speed/amount of blur & opacity
+    final targetBlur = (offset / 40).clamp(0.0, 8.0);
+    final targetOpacity = (offset / 160).clamp(0.0, 0.85);
+
+    // Update state only when values meaningfully change to avoid rebuild noise
+    if ((targetBlur - _blurSigma).abs() > 0.1 || (targetOpacity - _overlayOpacity).abs() > 0.02) {
+      setState(() {
+        _blurSigma = targetBlur;
+        _overlayOpacity = targetOpacity;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
@@ -70,110 +104,139 @@ class _CategoriesPageState extends State<CategoriesPage> {
               ),
             ),
 
-            // 🧭 Horizontal Categories Bar
+            // 🧭 Horizontal Categories Bar with translucent blur overlay
+            // We use a Stack so we can place BackdropFilter + Animated overlay on top of the ListView
             SizedBox(
               height: 110,
-              child: StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('shop_categories')
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return const Center(child: Text("Error loading categories"));
-                  }
-                  if (!snapshot.hasData) {
-                    return _buildCategoryShimmer(isDark);
-                  }
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // The horizontal categories list (underneath)
+                  StreamBuilder<QuerySnapshot>(
+                    stream: FirebaseFirestore.instance
+                        .collection('shop_categories')
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return const Center(child: Text("Error loading categories"));
+                      }
+                      if (!snapshot.hasData) {
+                        return _buildCategoryShimmer(isDark);
+                      }
 
-                  final categories = snapshot.data!.docs;
+                      final categories = snapshot.data!.docs;
 
-                  return ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    padding: const EdgeInsets.symmetric(horizontal: 8),
-                    itemCount: categories.length,
-                    itemBuilder: (context, index) {
-                      final data =
-                      categories[index].data() as Map<String, dynamic>;
-                      final name = (data["name"] ?? "").toString();
-                      final image = (data["image"] ?? "").toString();
-                      final selected = name == currentCategory;
+                      return ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        itemCount: categories.length,
+                        itemBuilder: (context, index) {
+                          final data =
+                          categories[index].data() as Map<String, dynamic>;
+                          final name = (data["name"] ?? "").toString();
+                          final image = (data["image"] ?? "").toString();
+                          final selected = name == currentCategory;
 
-                      return GestureDetector(
-                        onTap: () {
-                          if (name != currentCategory) {
-                            setState(() {
-                              currentCategory = name;
-                              searchQuery = "";
-                            });
-                          }
-                        },
-                        child: Container(
-                          width: 90,
-                          margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? (isDark ? Colors.white12 : Colors.white)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected
-                                  ? (isDark
-                                  ? Colors.white70
-                                  : Colors.black54)
-                                  : Colors.grey.withOpacity(0.3),
+                          return GestureDetector(
+                            onTap: () {
+                              if (name != currentCategory) {
+                                setState(() {
+                                  currentCategory = name;
+                                  searchQuery = "";
+                                });
+                              }
+                            },
+                            child: Container(
+                              width: 90,
+                              margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: selected
+                                    ? (isDark ? Colors.white12 : Colors.white)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: selected
+                                      ? (isDark
+                                      ? Colors.white70
+                                      : Colors.black54)
+                                      : Colors.grey.withOpacity(0.3),
+                                ),
+                                boxShadow: [
+                                  if (!isDark)
+                                    BoxShadow(
+                                      color: Colors.grey.withOpacity(0.15),
+                                      blurRadius: 4,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                ],
+                              ),
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: image.isNotEmpty
+                                        ? Image.network(
+                                      image,
+                                      height: 45,
+                                      width: 45,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) =>
+                                      const Icon(Icons.image_not_supported,
+                                          size: 40),
+                                    )
+                                        : const Icon(Icons.image_not_supported,
+                                        size: 40),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    name,
+                                    textAlign: TextAlign.center,
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: selected
+                                          ? FontWeight.bold
+                                          : FontWeight.normal,
+                                      color: textColor,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
                             ),
-                            boxShadow: [
-                              if (!isDark)
-                                BoxShadow(
-                                  color: Colors.grey.withOpacity(0.15),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: image.isNotEmpty
-                                    ? Image.network(
-                                  image,
-                                  height: 45,
-                                  width: 45,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                  const Icon(Icons.image_not_supported,
-                                      size: 40),
-                                )
-                                    : const Icon(Icons.image_not_supported,
-                                    size: 40),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                name,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: selected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: textColor,
-                                ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                          ),
-                        ),
+                          );
+                        },
                       );
                     },
-                  );
-                },
+                  ),
+
+                  // The blur + tint overlay that animates with scroll
+                  // Using BackdropFilter to blur underlying content, plus an AnimatedContainer for tint opacity
+                  // We also make the overlay ignore pointer events so it doesn't interfere with category taps
+                  IgnorePointer(
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 180),
+                      opacity: _overlayOpacity,
+                      child: BackdropFilter(
+                        filter: ImageFilter.blur(
+                          sigmaX: _blurSigma,
+                          sigmaY: _blurSigma,
+                        ),
+                        child: Container(
+                          // Tint color slightly adapts to theme
+                          color: isDark
+                              ? Colors.black.withOpacity(0.12 * _overlayOpacity)
+                              : Colors.white.withOpacity(0.6 * _overlayOpacity),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
-            // 🛒 Product Grid
+            // 🛒 Product Grid (scrolls using _scrollController so we can detect offset)
             Expanded(
               child: StreamBuilder<QuerySnapshot>(
                 stream: FirebaseFirestore.instance
@@ -182,8 +245,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
-                    return const Center(
-                        child: Text("Error loading products"));
+                    return const Center(child: Text("Error loading products"));
                   }
                   if (!snapshot.hasData) return _buildProductShimmer();
 
@@ -205,10 +267,10 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   }
 
                   return GridView.builder(
+                    controller: _scrollController, // << important: we listen to this
                     padding: const EdgeInsets.all(10),
                     physics: const BouncingScrollPhysics(),
-                    gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       mainAxisSpacing: 10,
                       crossAxisSpacing: 10,
@@ -399,7 +461,8 @@ class _ProductCardState extends State<ProductCard>
                       Text(
                         "Was ${product.old_price}",
                         style: TextStyle(
-                          color: (widget.isDark ? Colors.white70 : Colors.black)
+                          color:
+                          (widget.isDark ? Colors.white70 : Colors.black)
                               .withOpacity(0.6),
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
