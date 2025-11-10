@@ -13,14 +13,24 @@ class CategoriesPage extends StatefulWidget {
   State<CategoriesPage> createState() => _CategoriesPageState();
 }
 
-class _CategoriesPageState extends State<CategoriesPage> {
+class _CategoriesPageState extends State<CategoriesPage>
+    with TickerProviderStateMixin {
   String searchQuery = "";
   late String currentCategory;
+  late Map<String, AnimationController> _categoryControllers = {};
 
   @override
   void initState() {
     super.initState();
     currentCategory = widget.categoryName;
+  }
+
+  @override
+  void dispose() {
+    for (var c in _categoryControllers.values) {
+      c.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -99,75 +109,100 @@ class _CategoriesPageState extends State<CategoriesPage> {
                       final image = (data["image"] ?? "").toString();
                       final selected = name == currentCategory;
 
+                      _categoryControllers.putIfAbsent(
+                        name,
+                            () => AnimationController(
+                          vsync: this,
+                          duration: const Duration(milliseconds: 200),
+                          lowerBound: 0.9,
+                          upperBound: 1.1,
+                        )..value = selected ? 1.1 : 1.0,
+                      );
+
                       return GestureDetector(
                         onTap: () {
                           if (name != currentCategory) {
                             setState(() {
                               currentCategory = name;
                               searchQuery = "";
+                              _categoryControllers[name]!
+                                  .forward()
+                                  .then((_) =>
+                                  _categoryControllers[name]!.reverse());
                             });
                           }
                         },
-                        child: Container(
-                          width: 90,
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 6, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: selected
-                                ? (isDark ? Colors.white12 : Colors.white)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: selected
-                                  ? (isDark
-                                  ? Colors.white70
-                                  : Colors.black54)
-                                  : Colors.grey.withValues(alpha: 0.3),
-                            ),
-                            boxShadow: [
-                              if (!isDark)
-                                BoxShadow(
-                                  color: Colors.grey.withValues(alpha: 0.15),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
+                        child: AnimatedBuilder(
+                          animation: _categoryControllers[name]!,
+                          builder: (context, child) {
+                            return Transform.scale(
+                              scale: _categoryControllers[name]!.value,
+                              child: AnimatedContainer(
+                                duration: const Duration(milliseconds: 250),
+                                margin: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 8),
+                                width: 90,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? (isDark ? Colors.white12 : Colors.white)
+                                      : Colors.transparent,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: selected
+                                        ? (isDark
+                                        ? Colors.white70
+                                        : Colors.black54)
+                                        : Colors.grey.withValues(alpha: 0.3),
+                                  ),
+                                  boxShadow: [
+                                    if (!isDark)
+                                      BoxShadow(
+                                        color:
+                                        Colors.grey.withValues(alpha: 0.15),
+                                        blurRadius: 4,
+                                        offset: const Offset(0, 2),
+                                      ),
+                                  ],
                                 ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(10),
-                                child: image.isNotEmpty
-                                    ? Image.network(
-                                  image,
-                                  height: 45,
-                                  width: 45,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) =>
-                                  const Icon(
-                                      Icons.image_not_supported,
-                                      size: 40),
-                                )
-                                    : const Icon(Icons.image_not_supported,
-                                    size: 40),
-                              ),
-                              const SizedBox(height: 6),
-                              Text(
-                                name,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 12.5,
-                                  fontWeight: selected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: textColor,
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: image.isNotEmpty
+                                          ? Image.network(
+                                        image,
+                                        height: 45,
+                                        width: 45,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (_, __, ___) =>
+                                        const Icon(
+                                            Icons
+                                                .image_not_supported,
+                                            size: 40),
+                                      )
+                                          : const Icon(Icons.image_not_supported,
+                                          size: 40),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      name,
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12.5,
+                                        fontWeight: selected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: textColor,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
                       );
                     },
@@ -195,9 +230,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                   final filtered = allProducts
                       .where((p) =>
                   p.name.toLowerCase().contains(searchQuery) ||
-                      p.description
-                          .toLowerCase()
-                          .contains(searchQuery))
+                      p.description.toLowerCase().contains(searchQuery))
                       .toList();
 
                   if (filtered.isEmpty) {
@@ -238,7 +271,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-  // 🔹 Category shimmer (adaptive to theme)
+  // 🔹 Category shimmer
   Widget _buildCategoryShimmer(bool isDark) {
     final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
     final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
@@ -265,7 +298,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-  // 🔹 Product shimmer (adaptive)
+  // 🔹 Product shimmer
   Widget _buildProductShimmer(bool isDark) {
     final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
     final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
@@ -293,17 +326,14 @@ class _CategoriesPageState extends State<CategoriesPage> {
   }
 }
 
-// ----------------- Animated ProductCard -----------------
+// ----------------- ProductCard -----------------
 class ProductCard extends StatefulWidget {
   final dynamic product;
   final bool isDark;
-  final int index; // For staggered animation
+  final int index;
 
   const ProductCard(
-      {super.key,
-        required this.product,
-        required this.isDark,
-        required this.index});
+      {super.key, required this.product, required this.isDark, required this.index});
 
   @override
   State<ProductCard> createState() => _ProductCardState();
@@ -327,10 +357,11 @@ class _ProductCardState extends State<ProductCard>
       CurvedAnimation(parent: _controller, curve: Curves.easeIn),
     );
 
-    _slideAnim = Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
+    _slideAnim =
+        Tween<Offset>(begin: const Offset(0, 0.1), end: Offset.zero).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+        );
 
-    // Staggered delay
     Future.delayed(Duration(milliseconds: widget.index * 50), () {
       if (mounted) _controller.forward();
     });
@@ -397,8 +428,7 @@ class _ProductCardState extends State<ProductCard>
                         product.name,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color:
-                          widget.isDark ? Colors.white : Colors.black,
+                          color: widget.isDark ? Colors.white : Colors.black,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -415,9 +445,7 @@ class _ProductCardState extends State<ProductCard>
                       Text(
                         "Was ${product.old_price}",
                         style: TextStyle(
-                          color: (widget.isDark
-                              ? Colors.white70
-                              : Colors.black)
+                          color: (widget.isDark ? Colors.white70 : Colors.black)
                               .withValues(alpha: 0.6),
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
