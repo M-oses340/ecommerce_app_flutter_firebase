@@ -188,7 +188,7 @@ class _CategoriesPageState extends State<CategoriesPage> {
                     return const Center(
                         child: Text("Error loading products"));
                   }
-                  if (!snapshot.hasData) return _buildProductShimmer();
+                  if (!snapshot.hasData) return _buildProductShimmer(isDark);
 
                   final allProducts =
                   ProductsModel.fromJsonList(snapshot.data!.docs);
@@ -238,8 +238,11 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-  // 🔹 Category shimmer
+  // 🔹 Category shimmer (adaptive to theme)
   Widget _buildCategoryShimmer(bool isDark) {
+    final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
+    final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
     return ListView.builder(
       scrollDirection: Axis.horizontal,
       itemCount: 6,
@@ -247,13 +250,13 @@ class _CategoriesPageState extends State<CategoriesPage> {
       itemBuilder: (_, __) => Padding(
         padding: const EdgeInsets.symmetric(horizontal: 6),
         child: Shimmer.fromColors(
-          baseColor: isDark ? Colors.grey[700]! : Colors.grey[300]!,
-          highlightColor: isDark ? Colors.grey[500]! : Colors.grey[100]!,
+          baseColor: base,
+          highlightColor: highlight,
           child: Container(
             width: 90,
             height: 90,
             decoration: BoxDecoration(
-              color: Colors.grey[300],
+              color: base,
               borderRadius: BorderRadius.circular(12),
             ),
           ),
@@ -262,8 +265,11 @@ class _CategoriesPageState extends State<CategoriesPage> {
     );
   }
 
-  // 🔹 Product shimmer
-  Widget _buildProductShimmer() {
+  // 🔹 Product shimmer (adaptive)
+  Widget _buildProductShimmer(bool isDark) {
+    final base = isDark ? Colors.grey[850]! : Colors.grey[300]!;
+    final highlight = isDark ? Colors.grey[700]! : Colors.grey[100]!;
+
     return GridView.builder(
       padding: const EdgeInsets.all(10),
       itemCount: 6,
@@ -274,11 +280,11 @@ class _CategoriesPageState extends State<CategoriesPage> {
         childAspectRatio: 0.68,
       ),
       itemBuilder: (_, __) => Shimmer.fromColors(
-        baseColor: Colors.grey[300]!,
-        highlightColor: Colors.grey[100]!,
+        baseColor: base,
+        highlightColor: highlight,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.grey[300],
+            color: base,
             borderRadius: BorderRadius.circular(16),
           ),
         ),
