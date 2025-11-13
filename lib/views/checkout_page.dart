@@ -42,7 +42,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
       );
 
       final brightness = Theme.of(context).brightness;
-      final style = brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
+      final style =
+      brightness == Brightness.dark ? ThemeMode.dark : ThemeMode.light;
 
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
@@ -76,13 +77,13 @@ class _CheckoutPageState extends State<CheckoutPage> {
       String phone = _mpesaPhoneController.text.trim();
 
       if (phone.isEmpty) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Please enter your M-Pesa phone number")));
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Please enter your M-Pesa phone number")));
         return;
       }
 
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("Initiating M-Pesa payment...")));
+          .showSnackBar(const SnackBar(content: Text("Initiating M-Pesa payment...")));
 
       if (orderId == null) {
         orderId = await createOrderAfterPayment("M-Pesa (Pending)", preCreateOnly: true);
@@ -96,7 +97,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
       if (response["ResponseCode"] == "0") {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("STK Push sent! Check your phone to complete payment.")),
+          const SnackBar(content: Text("STK Push sent! Check your phone to complete payment.")),
         );
 
         await DbService().updateOrderStatus(
@@ -112,7 +113,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
     }
   }
 
-  Future<String> createOrderAfterPayment(String method, {bool preCreateOnly = false}) async {
+  Future<String> createOrderAfterPayment(String method,
+      {bool preCreateOnly = false}) async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     final user = Provider.of<UserProvider>(context, listen: false);
     User? currentUser = FirebaseAuth.instance.currentUser;
@@ -177,7 +179,7 @@ class _CheckoutPageState extends State<CheckoutPage> {
 
     Navigator.pop(context);
     ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text("Order placed successfully")));
+        .showSnackBar(const SnackBar(content: Text("Order placed successfully")));
   }
 
   @override
@@ -236,7 +238,8 @@ class _CheckoutPageState extends State<CheckoutPage> {
                           ),
                           const Spacer(),
                           IconButton(
-                            onPressed: () => Navigator.pushNamed(context, "/update_profile"),
+                            onPressed: () =>
+                                Navigator.pushNamed(context, "/update_profile"),
                             icon: Icon(Icons.edit_outlined, color: textColor),
                           )
                         ]),
@@ -252,16 +255,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                               style: TextStyle(color: textColor),
                               decoration: InputDecoration(
                                 labelText: "Coupon Code",
-                                labelStyle: TextStyle(color: textColor.withOpacity(0.7)),
+                                labelStyle: TextStyle(
+                                    color: textColor.withValues(alpha: 0.7)),
                                 filled: true,
                                 fillColor: cardColor,
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                                  borderSide: BorderSide(
+                                      color: textColor.withValues(alpha: 0.2)),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
-                                  borderSide: BorderSide(color: textColor.withOpacity(0.5)),
+                                  borderSide: BorderSide(
+                                      color: textColor.withValues(alpha: 0.5)),
                                 ),
                               ),
                             ),
@@ -296,7 +302,9 @@ class _CheckoutPageState extends State<CheckoutPage> {
                       const Divider(),
                       Text("Total Payable: KSh $total",
                           style: TextStyle(
-                              fontSize: 18, fontWeight: FontWeight.w500, color: textColor)),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w500,
+                              color: textColor)),
                       const SizedBox(height: 20),
                       Text("Pay with M-Pesa", style: TextStyle(color: textColor)),
                       TextField(
@@ -305,16 +313,19 @@ class _CheckoutPageState extends State<CheckoutPage> {
                         style: TextStyle(color: textColor),
                         decoration: InputDecoration(
                           hintText: "Enter M-Pesa phone number",
-                          hintStyle: TextStyle(color: textColor.withOpacity(0.6)),
+                          hintStyle:
+                          TextStyle(color: textColor.withValues(alpha: 0.6)),
                           filled: true,
                           fillColor: cardColor,
                           enabledBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: textColor.withOpacity(0.2)),
+                            borderSide:
+                            BorderSide(color: textColor.withValues(alpha: 0.2)),
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: textColor.withOpacity(0.5)),
+                            borderSide:
+                            BorderSide(color: textColor.withValues(alpha: 0.5)),
                           ),
                         ),
                       ),
