@@ -3,13 +3,12 @@ import 'package:ecommerce_app/views/search_view.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:ecommerce_app/containers/category_container.dart';
+//import 'package:ecommerce_app/containers/category_container.dart';
 import 'package:ecommerce_app/containers/discount_container.dart';
 import 'package:ecommerce_app/containers/promo_container.dart';
 import 'package:ecommerce_app/models/products_model.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,7 +22,7 @@ class _HomePageState extends State<HomePage>
   @override
   bool get wantKeepAlive => true;
 
-  String _searchQuery = "";
+ // String _searchQuery = "";
   bool _isOnline = true;
   bool _isLoading = true;
   bool _showNoInternetBanner = false;
@@ -174,7 +173,8 @@ class _HomePageState extends State<HomePage>
                 decoration: BoxDecoration(
                   color: theme.cardColor,
                   borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: theme.dividerColor.withOpacity(0.4)),
+                  border: Border.all(
+                      color: theme.dividerColor.withValues(alpha: 0.4)),
                 ),
                 child: Row(
                   children: [
@@ -204,22 +204,23 @@ class _HomePageState extends State<HomePage>
                 slivers: [
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding:
-                      EdgeInsets.only(top: 10, left: 12, right: 12, bottom: 6),
+                      padding: EdgeInsets.only(
+                          top: 10, left: 12, right: 12, bottom: 6),
                       child: PromoContainer(),
                     ),
                   ),
                   const SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding:
+                      EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                       child: DiscountContainer(),
                     ),
                   ),
 
                   // Products Grid
                   SliverPadding(
-                    padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
                     sliver: StreamBuilder<QuerySnapshot>(
                       stream: FirebaseFirestore.instance
                           .collection("shop_products")
@@ -253,8 +254,8 @@ class _HomePageState extends State<HomePage>
                           );
                         }
 
-                        final products = ProductsModel.fromJsonList(
-                            snapshot.data!.docs);
+                        final products =
+                        ProductsModel.fromJsonList(snapshot.data!.docs);
 
                         return SliverGrid(
                           gridDelegate:
@@ -290,10 +291,12 @@ class _HomePageState extends State<HomePage>
                   color: theme.colorScheme.error,
                   child: InkWell(
                     onTap: _autoRefreshData,
-                    splashColor: Colors.white.withOpacity(0.2),
+                    splashColor:
+                    Colors.white.withValues(alpha: 0.2),
                     child: Container(
                       height: 60,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      padding:
+                      const EdgeInsets.symmetric(horizontal: 16),
                       child: const Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -345,7 +348,6 @@ class _HomePageState extends State<HomePage>
   }
 }
 
-/// ProductCard stays the same
 class ProductCard extends StatelessWidget {
   final ProductsModel product;
   const ProductCard({super.key, required this.product});
@@ -354,7 +356,9 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final discount = product.old_price > 0
-        ? ((product.old_price - product.new_price) / product.old_price * 100)
+        ? ((product.old_price - product.new_price) /
+        product.old_price *
+        100)
         .round()
         : 0;
 
@@ -384,10 +388,9 @@ class ProductCard extends StatelessWidget {
                       width: double.infinity,
                       fit: BoxFit.cover,
                       placeholder: (context, url) => Shimmer.fromColors(
-                        baseColor:
-                        theme.dividerColor.withOpacity(0.3),
+                        baseColor: theme.dividerColor.withValues(alpha: 0.3),
                         highlightColor:
-                        theme.dividerColor.withOpacity(0.1),
+                        theme.dividerColor.withValues(alpha: 0.1),
                         child: Container(height: 150, color: theme.cardColor),
                       ),
                       errorWidget: (context, url, error) =>
@@ -409,14 +412,16 @@ class ProductCard extends StatelessWidget {
                       child: Text(
                         '-$discount%',
                         style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.bold),
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold),
                       ),
                     ),
                   ),
               ],
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               child: Text(
                 product.name,
                 maxLines: 2,
@@ -425,7 +430,8 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               child: Row(
                 children: [
                   if (product.old_price > product.new_price)
@@ -459,8 +465,8 @@ class ShimmerProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Shimmer.fromColors(
-      baseColor: theme.dividerColor.withOpacity(0.3),
-      highlightColor: theme.dividerColor.withOpacity(0.1),
+      baseColor: theme.dividerColor.withValues(alpha: 0.3),
+      highlightColor: theme.dividerColor.withValues(alpha: 0.1),
       child: Card(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         child: Container(height: 250, color: theme.cardColor),
