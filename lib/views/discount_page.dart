@@ -16,7 +16,7 @@ class _DiscountPageState extends State<DiscountPage> {
   forceMaterialTransparency: true,),
     body: StreamBuilder(stream: DbService().readDiscounts(), builder: (context,snapshot){
       if(snapshot.hasData){
-        List<CouponModel> discounts= CouponModel.fromJsonList(snapshot.data!.docs) as List<CouponModel>;
+        List<CouponModel> discounts= CouponModel.fromJsonList(snapshot.data!.docs);
 
         if(discounts.isEmpty){
           return SizedBox();
