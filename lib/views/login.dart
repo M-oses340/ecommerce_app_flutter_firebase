@@ -2,7 +2,6 @@
 import 'dart:ui';
 import 'package:ecommerce_app/controllers/auth_service.dart';
 import 'package:ecommerce_app/providers/user_provider.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -38,10 +37,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
   @override
   void dispose() {
+    if (_spinnerController.isAnimating) _spinnerController.stop();
+    _spinnerController.dispose();
     _emailOrPhoneController.dispose();
     _passwordController.dispose();
     _resetEmailController.dispose();
-    _spinnerController.dispose();
     super.dispose();
   }
 
@@ -69,8 +69,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                     margin: EdgeInsets.fromLTRB(20, 0, 20, viewInsets.bottom),
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(15)),
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -78,7 +79,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         const Text(
                           "Forgot Password",
                           style: TextStyle(
-                              fontSize: 20, fontWeight: FontWeight.bold),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                         const SizedBox(height: 10),
                         const Text("Enter your email"),
@@ -96,10 +99,11 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           mainAxisAlignment: MainAxisAlignment.end,
                           children: [
                             TextButton(
-                                onPressed: _isResetLoading
-                                    ? null
-                                    : () => Navigator.pop(context),
-                                child: const Text("Cancel")),
+                              onPressed: _isResetLoading
+                                  ? null
+                                  : () => Navigator.pop(context),
+                              child: const Text("Cancel"),
+                            ),
                             ElevatedButton(
                               onPressed: _isResetLoading
                                   ? null
@@ -107,8 +111,9 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                 if (_resetEmailController.text.isEmpty) {
                                   ScaffoldMessenger.of(context)
                                       .showSnackBar(const SnackBar(
-                                      content: Text(
-                                          "Email cannot be empty")));
+                                    content:
+                                    Text("Email cannot be empty"),
+                                  ));
                                   return;
                                 }
                                 setDialogState(
@@ -129,8 +134,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                                   } else {
                                     ScaffoldMessenger.of(context)
                                         .showSnackBar(SnackBar(
-                                      content: const Text(
-                                          "Unable to reset password."),
+                                      content:
+                                      Text(result.toString()),
                                       backgroundColor: Colors.redAccent,
                                     ));
                                   }
@@ -173,7 +178,6 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
     if (!formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
-
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
     try {
@@ -184,26 +188,20 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
 
       if (result == "Login Successful") {
         userProvider.loadUserData();
-
-        // Save login state for biometrics
         await storage.write(key: "logged_in", value: "true");
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Login Successful"),
-            backgroundColor: Colors.green,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("Login Successful"),
+          backgroundColor: Colors.green,
+        ));
 
         Navigator.restorablePushNamedAndRemoveUntil(
             context, "/home", (_) => false);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text("Login failed. Try again."),
-            backgroundColor: Colors.red.shade400,
-          ),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(result),
+          backgroundColor: Colors.red.shade400,
+        ));
       }
     } finally {
       setState(() => _isLoading = false);
@@ -218,7 +216,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
       if (result == "Login Successful") {
         await storage.write(key: "logged_in", value: "true");
         Provider.of<UserProvider>(context, listen: false).loadUserData();
-        Navigator.restorablePushNamedAndRemoveUntil(context, "/home", (_) => false);
+        Navigator.restorablePushNamedAndRemoveUntil(
+            context, "/home", (_) => false);
       }
     } finally {
       setState(() => _isLoading = false);
@@ -245,11 +244,15 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                   const SizedBox(height: 100),
                   Center(child: Image.asset(logoPath, width: 120, height: 120)),
                   const SizedBox(height: 20),
-                  const Text("Welcome Back",
-                      style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold)),
+                  const Text(
+                    "Welcome Back",
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 5),
-                  Text("Login to continue",
-                      style: TextStyle(color: Colors.grey[600], fontSize: 15)),
+                  Text(
+                    "Login to continue",
+                    style: TextStyle(color: Colors.grey[600], fontSize: 15),
+                  ),
                   const SizedBox(height: 30),
 
                   // Email/Phone
@@ -288,7 +291,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           icon: Icon(_obscureText
                               ? Icons.visibility
                               : Icons.visibility_off),
-                          onPressed: () => setState(() => _obscureText = !_obscureText),
+                          onPressed: () =>
+                              setState(() => _obscureText = !_obscureText),
                         ),
                       ),
                     ),
@@ -314,7 +318,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                         backgroundColor: theme.primaryColor,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
                       ),
                       child: AnimatedSwitcher(
                         duration: const Duration(milliseconds: 200),
@@ -324,7 +329,8 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                           child: const Icon(Icons.autorenew,
                               color: Colors.white),
                         )
-                            : const Text("Login", style: TextStyle(fontSize: 16)),
+                            : const Text("Login",
+                            style: TextStyle(fontSize: 16)),
                       ),
                     ),
                   ),
@@ -351,18 +357,21 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
                         foregroundColor: Colors.black87,
-                        side: BorderSide(color: theme.primaryColor.withOpacity(0.2)),
+                        side: BorderSide(
+                          color: theme.primaryColor.withValues(alpha: 0.2),
+                        ),
+
                         elevation: 2,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(8)),
                       ),
-                      icon: Image.asset('assets/images/google_logo.png', height: 22, width: 22),
+                      icon: Image.asset('assets/images/google_logo.png',
+                          height: 22, width: 22),
                       label: const Text("Continue with Google",
                           style: TextStyle(fontSize: 16)),
                       onPressed: _isLoading ? null : _handleGoogleLogin,
                     ),
                   ),
-
                   const SizedBox(height: 25),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -387,7 +396,7 @@ class _LoginPageState extends State<LoginPage> with SingleTickerProviderStateMix
             ignoring: !_isLoading,
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 300),
-              opacity: _isLoading ? 0.3 : 0.0,
+              opacity: _isLoading ? 0.45 : 0.0,
               child: Container(color: Colors.black),
             ),
           ),
